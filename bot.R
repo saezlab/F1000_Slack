@@ -1,13 +1,16 @@
-library(httr)
-library(jsonlite)
-library(purrr)
-library(rlist)
+suppressPackageStartupMessages({
+  library(httr)
+  library(jsonlite)
+  library(purrr)
+  library(rlist)
+})
 
-load("state.rdata")
+load("/path/to/state.rdata")
 
 resp <- GET("https://f1000.com/extapi/work/references?projectId=419191&sort=addedDate:desc", 
     add_headers(Authorization = paste("Bearer", f1000auth)))
 
+print(paste(Sys.time(), "GET status", resp$status_code))
 
 if(resp$status_code == 200) {
   refs <- content(resp)$results
@@ -21,11 +24,17 @@ if(resp$status_code == 200) {
     
     list(type = "section", text = list(type = "mrkdwn", text = details ))
   })
-  content  <- toJSON(list(blocks = blocks), auto_unbox = TRUE)
-  outcome <- POST(url = webhook, content_type_json(), body = content)
-  if(outcome$status_code == 200){
-    lastDate <- refs[[1]]$f1000AddedDate
-    save(f1000auth, webhook, lastDate, file = "state.rdata")
+
+  if(length(blocks) > 0){
+    content  <- toJSON(list(blocks = blocks), auto_unbox = TRUE)
+    outcome <- POST(url = webhook, content_type_json(), body = content)
+
+    print(paste(Sys.time(), "POST status", outcome$status_code))
+
+    if(outcome$status_code == 200){
+      lastDate <- refs[[1]]$f1000AddedDate
+      save(f1000auth, webhook, lastDate, file = "/path/to/state.rdata")
+    }
   }
 }
 
