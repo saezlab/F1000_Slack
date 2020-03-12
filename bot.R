@@ -52,7 +52,7 @@ webhooks %>% pwalk(function(...) {
 })
 
 if(templastDate > lastDate){
-  save(f1000auth, webhooks, lastDate, file = "/path/to/state.rdata")
+  save(f1000auth, webhooks, templastDate, file = "/path/to/state.rdata")
 }
 
 
