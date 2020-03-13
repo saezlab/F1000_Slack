@@ -29,10 +29,9 @@ webhooks %>% pwalk(function(...) {
       
       details <- paste0(
         note,
-        r$authorsText, ". <", r$fullTextLink, "|", r$title, "> ",
+        r$authorsText, ". <https://f1000.com/work/#/items/", r$id, "/detail?collection=", current$projectId, "|", r$title, "> ",
         r$journalName, ". ", r$publishedYear, 
         " - added by: ", r$f1000AddedBy,
-        "- <https://f1000.com/work/#/items/", r$id, "/detail?collection=", current$projectId, "| workspace>",
         ifelse(length(r$f1000Tags) > 0,
           paste0(" - tags: ", paste0(r$f1000Tags, collapse = " ")),
           ""
