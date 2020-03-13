@@ -6,7 +6,7 @@ suppressPackageStartupMessages({
   library(rlist)
 })
 
-load("/path/to/state.rdata")
+load("state.rdata")
 
 templastDate <- lastDate
 
@@ -21,10 +21,18 @@ webhooks %>% pwalk(function(...) {
   if (resp$status_code == 200) {
     refs <- content(resp)$results
     blocks <- list.filter(refs, f1000AddedDate > lastDate) %>% map(function(r) {
+      noteResp <- GET(
+        paste0("https://f1000.com/extapi/work/references/", r$id, "/notes?"),
+        add_headers(Authorization = paste("Bearer", f1000auth)))
+      note <- ifelse(noteResp$status_code == 200 & length(content(noteResp)) > 0, 
+                     paste0(list.sort(content(noteResp), created)[[1]]$comment, "\n"), "")
+      
       details <- paste0(
+        note,
         r$authorsText, ". <", r$fullTextLink, "|", r$title, "> ",
-        r$journalName, ". ", r$publishedYear,
+        r$journalName, ". ", r$publishedYear, 
         " - added by: ", r$f1000AddedBy,
+        "- <https://f1000.com/work/#/items/", r$id, "/detail?collection=", current$projectId, "| workspace>",
         ifelse(length(r$f1000Tags) > 0,
           paste0(" - tags: ", paste0(r$f1000Tags, collapse = " ")),
           ""
@@ -39,12 +47,12 @@ webhooks %>% pwalk(function(...) {
 
       content <- toJSON(list(blocks = blocks), auto_unbox = TRUE)
       outcome <- POST(url = webhook, content_type_json(), body = content)
-
+      
       print(paste(Sys.time(), "POST status", outcome$status_code))
-
+      
       if (outcome$status_code == 200) {
         if (refs[[1]]$f1000AddedDate > templastDate) {
-          templastDate <- refs[[1]]$f1000AddedDate
+          templastDate <<- refs[[1]]$f1000AddedDate
         }
       }
     }
@@ -52,7 +60,7 @@ webhooks %>% pwalk(function(...) {
 })
 
 if(templastDate > lastDate){
-  save(f1000auth, webhooks, templastDate, file = "/path/to/state.rdata")
+  save(f1000auth, webhooks, templastDate, file = "state.rdata")
 }
 
 
