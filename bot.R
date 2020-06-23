@@ -25,8 +25,11 @@ webhooks %>% pwalk(function(...) {
         paste0("https://sciwheel.com/extapi/work/references/", r$id, "/notes?"),
         add_headers(Authorization = paste("Bearer", f1000auth))
       )
-      note <- ifelse(noteResp$status_code == 200 & length(content(noteResp)) > 0,
-        paste0(list.sort(content(noteResp), created)[[1]]$comment, "\n"), ""
+    
+      
+      comments <- list.filter(content(noteResp), is.null(highlightText))
+      note <- ifelse(noteResp$status_code == 200 & length(comments) > 0,
+                     paste0(list.sort(comments, created)[[1]]$comment, "\n"), ""
       )
 
       details <- paste0(
