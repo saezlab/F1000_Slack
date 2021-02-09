@@ -3,6 +3,7 @@ suppressPackageStartupMessages({
   library(jsonlite)
   library(purrr)
   library(dplyr)
+  library(stringr)
   library(rlist)
 })
 
@@ -27,10 +28,12 @@ webhooks %>% pwalk(function(...) {
       )
     
       
+      # references to usernames will be matched and converted to lowercase per agreement
       comments <- list.filter(content(noteResp), is.null(highlightText))
       note <- ifelse(noteResp$status_code == 200 & length(comments) > 0,
                      paste0(list.sort(comments, created)[[1]]$comment, "\n"), ""
-      )
+      ) %>% str_replace_all("@\\w+", tolower)
+      
 
       details <- paste0(
         note,
