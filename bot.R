@@ -9,10 +9,12 @@ suppressPackageStartupMessages({
 
 load("state.rdata")
 
-templastDate <- lastDate
-
-webhooks %>% pwalk(function(...) {
+# returns last date
+lastDates <- webhooks %>% pmap_dbl(function(...) {
   current <- data.frame(...)
+
+  templastDate <- current$lastDate
+  
   resp <- GET(
     paste0("https://sciwheel.com/extapi/work/references?projectId=", current$projectId, "&sort=addedDate:desc"),
     add_headers(Authorization = paste("Bearer", f1000auth))
@@ -20,8 +22,11 @@ webhooks %>% pwalk(function(...) {
   print(paste(Sys.time(), "channel", current$channel, "GET status", resp$status_code))
 
   if (resp$status_code == 200) {
-    refs <- content(resp)$results
-    blocks <- list.filter(refs, f1000AddedDate > lastDate) %>% map(function(r) {
+    refs <- content(resp)$results %>% 
+      list.filter(f1000AddedDate > templastDate) %>% 
+      rev()
+    
+    blocks <- refs  %>% map(function(r) {
       noteResp <- GET(
         paste0("https://sciwheel.com/extapi/work/references/", r$id, "/notes?"),
         add_headers(Authorization = paste("Bearer", f1000auth))
@@ -52,28 +57,41 @@ webhooks %>% pwalk(function(...) {
           r$id, "/detail?collection=", current$projectId, "|", r$title, "> "
         )
       }
-
-      list(type = "section", text = list(type = "mrkdwn", text = details))
+      
+      list(text = details, mrkdwn = TRUE)
     })
 
     if (length(blocks) > 0) {
       webhook <- as.character(current$webhook)
-
-      content <- toJSON(list(blocks = blocks), auto_unbox = TRUE)
-      outcome <- POST(url = webhook, content_type_json(), body = content)
-
-      print(paste(Sys.time(), "POST status", outcome$status_code))
-
-      if (outcome$status_code == 200) {
-        if (refs[[1]]$f1000AddedDate > templastDate) {
-          templastDate <<- refs[[1]]$f1000AddedDate
+      
+      # one paper at a time with wait in between so we don't get rate limited
+      alive <- TRUE
+      respcodes <- blocks %>% map2_int(refs %>% map(~.x$f1000AddedDate), function(block, addedDate){
+        if(alive){
+          Sys.sleep(1.05)
+          content <- toJSON(block, auto_unbox = TRUE)
+          outcome <- POST(url = webhook, content_type_json(), body = content)
+          if(outcome$status_code == 200){
+            if (addedDate > templastDate) {
+              templastDate <<- addedDate
+            }
+          } else {
+            alive <<- FALSE
+          }
+          outcome$status_code
+        } else {
+          -1
         }
-      }
+      })
+
+      print(paste(Sys.time(), "POST status", paste(respcodes, collapse = ", ")))
+      
     }
   }
+  templastDate
 })
 
-if (templastDate > lastDate) {
-  lastDate <- templastDate
-  save(f1000auth, webhooks, lastDate, file = "state.rdata")
+if(sum(lastDates > webhooks$lastDate) > 0){
+  webhooks$lastDate <- lastDates
+  save(f1000auth, webhooks, file = "state.rdata")
 }
