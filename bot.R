@@ -58,7 +58,7 @@ lastDates <- webhooks %>% pmap_dbl(function(...) {
         )
       }
       
-      list(text = details, mrkdwn = TRUE)
+      list(type = "section", text = list(type = "mrkdwn", text = details))
     })
 
     if (length(blocks) > 0) {
@@ -69,8 +69,8 @@ lastDates <- webhooks %>% pmap_dbl(function(...) {
       respcodes <- blocks %>% map2_int(refs %>% map(~.x$f1000AddedDate), function(block, addedDate){
         if(alive){
           Sys.sleep(1.05)
-          content <- toJSON(block, auto_unbox = TRUE)
-          outcome <- POST(url = webhook, content_type_json(), body = content)
+          content <- toJSON(list(blocks = list(block)), auto_unbox = TRUE)
+          cinoutcome <- POST(url = webhook, content_type_json(), body = content)
           if(outcome$status_code == 200){
             if (addedDate > templastDate) {
               templastDate <<- addedDate
