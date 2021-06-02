@@ -70,7 +70,7 @@ lastDates <- webhooks %>% pmap_dbl(function(...) {
         if(alive){
           Sys.sleep(1.05)
           content <- toJSON(list(blocks = list(block)), auto_unbox = TRUE)
-          cinoutcome <- POST(url = webhook, content_type_json(), body = content)
+          outcome <- POST(url = webhook, content_type_json(), body = content)
           if(outcome$status_code == 200){
             if (addedDate > templastDate) {
               templastDate <<- addedDate
