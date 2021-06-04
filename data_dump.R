@@ -2,12 +2,14 @@ suppressPackageStartupMessages({
   library(httr)
   library(jsonlite)
   library(purrr)
-  library(magrittr)
+  library(dplyr)
 })
 
 load("state.rdata")
 
-dump <- webhooks %>% pmap(function(...) {
+distinct.webhooks <- webhooks %>% distinct(projectId, .keep_all = TRUE)
+
+dump <- distinct.webhooks %>% pmap(function(...) {
   current <- data.frame(...)
   resp <- GET(
     paste0("https://sciwheel.com/extapi/work/references?projectId=", current$projectId, "&sort=addedDate:desc"),
@@ -21,7 +23,7 @@ dump <- webhooks %>% pmap(function(...) {
     
     project.notes <- project.content$results %>% map(function(r) {
       noteResp <- GET(
-        paste0("https://sciwheel.com/extapi/work/references/", test$id, "/notes?"),
+        paste0("https://sciwheel.com/extapi/work/references/", r$id, "/notes?"),
         add_headers(Authorization = paste("Bearer", f1000auth))
       )
     })
@@ -33,7 +35,7 @@ dump <- webhooks %>% pmap(function(...) {
   }
 })
 
-names(dump) <- webhooks$channel
+names(dump) <- distinct.webhooks$channel
 
 if(file.exists("data_dump.rds")){
   file.rename("data_dump.rds", "data_dump_old.rds")
