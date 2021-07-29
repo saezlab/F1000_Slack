@@ -5,18 +5,11 @@ suppressPackageStartupMessages({
   library(dplyr)
 })
 
-load("state.rdata")
-
-distinct.webhooks <- webhooks %>% distinct(projectId, .keep_all = TRUE)
-
-dump <- distinct.webhooks %>% pmap(function(...) {
-  current <- data.frame(...)
+get_page <- function(projectId, page, f1000auth) {
   resp <- GET(
-    paste0("https://sciwheel.com/extapi/work/references?projectId=", current$projectId, "&sort=addedDate:desc"),
+    paste0("https://sciwheel.com/extapi/work/references?projectId=", projectId, "&sort=addedDate:desc&page=", page),
     add_headers(Authorization = paste("Bearer", f1000auth))
   )
-  print(paste(Sys.time(), "channel", current$channel, "GET status", resp$status_code))
-
 
   if (resp$status_code == 200) {
     project.content <- content(resp)
@@ -33,6 +26,29 @@ dump <- distinct.webhooks %>% pmap(function(...) {
   } else {
     NULL
   }
+}
+
+get_pages <- function(projectId, f1000auth, page = 1) {
+  page.results <- get_page(projectId, page, f1000auth)
+
+  if (page >= page.results$content$totalPages) {
+    list(content = page.results$content$results, notes = page.results$notes)
+  } else {
+    next.page.results <- get_pages(projectId, f1000auth, page + 1)
+    list(
+      content = c(page.results$content$results, next.page.results$content),
+      notes = c(page.results$notes, next.page.results$notes)
+    )
+  }
+}
+
+load("state.rdata")
+
+distinct.webhooks <- webhooks %>% distinct(projectId, .keep_all = TRUE)
+
+dump <- distinct.webhooks %>% pmap(function(...) {
+  current <- data.frame(...)
+  get_pages(current$projectId, f1000auth)
 })
 
 names(dump) <- distinct.webhooks$channel
