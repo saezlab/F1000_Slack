@@ -85,7 +85,8 @@ lastDates <- webhooks %>% pmap_dbl(\(...) {
         details <- paste0(
           "Full information too long to display. ",
           "<https://sciwheel.com/work/#/items/",
-          r$id, "/detail?collection=", current$projectId, "|", r$title, "> "
+          r$id, "/detail?collection=", current$projectId, "|", r$title, "> ",
+          " - added by: ", r$f1000AddedBy
         )
       }
 
