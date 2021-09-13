@@ -55,8 +55,10 @@ lastDates <- webhooks %>% pmap_dbl(\(...) {
             pull(display_name_normalized) %>%
             str_remove_all("\\s") %>%
             tolower(),
-          method = "osa",
-          maxDist = 3)
+          method = "jw",
+          weight = c(d = 0.1, s = 1, i = 1, t = 1),
+          p = 0.1,
+          maxDist = 0.5)
 
         if (is.na(match)) {
           return(name)
