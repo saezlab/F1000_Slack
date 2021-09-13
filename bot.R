@@ -6,6 +6,7 @@ suppressPackageStartupMessages({
   library(stringr)
   library(rlist)
   library(slackr)
+  library(stringdist)
 })
 
 load("state.rdata")
@@ -47,26 +48,21 @@ lastDates <- webhooks %>% pmap_dbl(\(...) {
       note <- ifelse(noteResp$status_code == 200 & length(comments) > 0,
         paste0(list.sort(comments, created)[[1]]$comment, "\n"), ""
       ) %>% str_replace_all("@\\w+", \(name){
-        match <- str_which(
+        match <- amatch(
+          str_remove(name, "@") %>%
+            tolower(),
           users %>%
             pull(display_name_normalized) %>%
             str_remove_all("\\s") %>%
             tolower(),
-          str_remove(name, "@") %>% tolower()
-        )
+          method = "osa",
+          maxDist = 3)
 
-        if (length(match) == 9) {
+        if (is.na(match)) {
           return(name)
+        } else {
+          paste0("<@", users %>% pluck("id", match), ">")
         }
-
-        users %>%
-          slice(match) %>%
-          mutate(
-            ref = paste0("<@", id, ">"),
-            match.per = (nchar(!!name) - 1) / nchar(display_name_normalized)
-          ) %>%
-          arrange(-match.per) %>%
-          pluck("ref", 1)
       })
 
       details <- paste0(
