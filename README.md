@@ -22,3 +22,10 @@ Open the crontab `crontab -e` and add a job
 0 8 * * * Rscript /path/to/bot.R
 ```
 
+## Plotting sciwheel stats
+
+The generated data dump can can be found in the bq_shared folder on the BioQuant cluster. 
+Use the sciwheel_stats_process.R script to filter the data for the year of interest and tidy the data
+to generate plots of the labs sciwheel usage. 
+
+
