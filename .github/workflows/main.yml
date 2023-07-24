@@ -17,7 +17,7 @@ jobs:
         
         - name: Install dependencies
           run: | 
-               install.packages(c('httr', 'jsonlite', 'purrr', 'dplyr', 'readr' 
+               install.packages(c('httr', 'jsonlite', 'purrr', 'dplyr', 'readr', 
                'stringr', 'rlist', 'slackr', 'stringdist','googledrive'))
           shell: Rscript {0}  
 
