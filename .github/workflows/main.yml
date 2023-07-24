@@ -24,7 +24,7 @@ jobs:
         - name: Install dependencies
           run: | 
                install.packages(c('httr', 'jsonlite', 'purrr', 'dplyr', 'readr', 
-               'stringr', 'rlist', 'slackr', 'stringdist','googledrive'))
+               'stringr', 'rlist', 'slackr', 'stringdist','googledrive','base64enc'))
           shell: Rscript {0}  
 
         - name: test google drive
