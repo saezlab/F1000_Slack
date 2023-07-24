@@ -7,34 +7,19 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Checkout repo
+				uses: actions/checkout@v3
+​
+			- name: Setup R
+				uses: r-lib/actions/setup-r@v2
+				with:
+					r-version: '4.3'
+​
+			- name: Install dependencies
+				run: | 
+          install.packages(c('httr', 'jsonlite', 'purrr', 'dplyr', 'readr' 
+          'stringr', 'rlist', 'slackr', 'stringdist','googledrive'))
+				shell: Rscript {0}  
 
-      - name: Checkout code
-        uses: actions/checkout@v2
-
-      - name: Archive files
-        run: |
-          sudo apt-get update
-          sudo apt-get install zip
-          zip -r archive.zip *
-
-      - name: Upload to gdrive
-        uses: adityak74/google-drive-upload-git-action@main
-        with:
-          credentials: ${{ secrets.credentials }}
-          filename: "archive.zip"
-          folderId: ${{ secrets.folderId }}
-          name: "documentation.zip" # optional string
-          overwrite: "true" # optional boolean
-      - name: Make Directory Structure
-        run: |
-          mkdir -p w/x/y
-          date +%s > w/x/y/z
-      - name: Mirror Directory Structure
-        uses: adityak74/google-drive-upload-git-action@main
-        with:
-          credentials: ${{ secrets.DRIVE_CREDENTIALS }}
-          filename: w/x/y/z
-          folderId: ${{ secrets.folderId }}
-          overwrite: "true"
-          mirrorDirectoryStructure: "true"
-          
+      - name: test google drive
+        run: Rscript test_gdrive_update.r ${{secrets.CREDENTIALS}} {{secrets.STATEFILE_GDRIVE}}
