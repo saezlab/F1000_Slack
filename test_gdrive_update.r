@@ -2,7 +2,7 @@
 # test google drive api
 
 library(googledrive)
-library(tidyverse)
+library(readr)
 
 # get command line secret inputs
 args <- commandArgs(trailingOnly = TRUE)
