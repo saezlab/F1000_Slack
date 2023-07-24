@@ -10,6 +10,9 @@ jobs:
         - name: Checkout repo
           uses: actions/checkout@v3
           
+        - name: Update apt cache
+          run: sudo apt-get update
+   
         - name: Install cURL Headers
           run: sudo apt-get install libcurl4-openssl-dev
     
