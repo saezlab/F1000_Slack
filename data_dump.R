@@ -3,7 +3,32 @@ suppressPackageStartupMessages({
   library(jsonlite)
   library(purrr)
   library(dplyr)
+  library(googledrive)
+  library(readr)
 })
+
+# get command line secret inputs
+args <- commandArgs(trailingOnly = TRUE)
+
+# 1st: credentials for Google Drive
+credentials <- args[[1]]
+
+# Dump file path on google drive: 
+file_path <- args[[2]]
+
+
+# Sciwheel authentication token:
+f1000auth <- args[[3]]
+
+
+# Load the state from Drive
+# authenticate to Google drive
+drive_auth(path = rawToChar(base64enc::base64decode(credentials)), email = "f1000bot-service-account@f1000bot.iam.gserviceaccount.com" )
+
+# read the file from google drive
+webhooks <- drive_read_string(file = file_path) %>% read_csv()
+
+
 
 get_page <- function(projectId, page, f1000auth) {
   resp <- GET(
@@ -42,7 +67,7 @@ get_pages <- function(projectId, f1000auth, page = 1) {
   }
 }
 
-load("state.rdata")
+
 
 distinct.webhooks <- webhooks %>% distinct(projectId, .keep_all = TRUE)
 
@@ -53,8 +78,7 @@ dump <- distinct.webhooks %>% pmap(function(...) {
 
 names(dump) <- distinct.webhooks$channel
 
-if (file.exists("data_dump.rds")) {
-  file.rename("data_dump.rds", "data_dump_old.rds")
-}
 
-saveRDS(dump, "data_dump.rds")
+saveRDS(dump, "./data_dump.rds")
+drive_update(file = file_path, media = "./data_dump.rds")
+
