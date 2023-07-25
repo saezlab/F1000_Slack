@@ -21,11 +21,16 @@ jobs:
           with:
               r-version: '4.3'
         
-        - name: Install dependencies
-          run: | 
-               install.packages(c('httr', 'jsonlite', 'purrr', 'dplyr', 'readr', 
-               'stringr', 'rlist', 'slackr', 'stringdist','googledrive','base64enc'))
-          shell: Rscript {0}  
+        # This should install dependencies from the DESCRIPTION. Caching them too.  
+        - uses: r-lib/actions/setup-r-dependencies@v2
+          with:
+              cache-version: 2
+        
+        #- name: Install dependencies
+        #  run: | 
+        #       install.packages(c('httr', 'jsonlite', 'purrr', 'dplyr', 'readr', 
+        #       'stringr', 'rlist', 'slackr', 'stringdist','googledrive','base64enc'))
+        #  shell: Rscript {0}  
 
         - name: test bot
           run: Rscript bot_test.r ${{secrets.CREDENTIALS}} ${{secrets.STATEFILE_GDRIVE}} ${{secrets.SLACK_BOT_TOKEN}} ${{secrets.F1000AUTH}}
