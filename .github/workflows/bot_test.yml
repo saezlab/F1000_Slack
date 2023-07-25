@@ -33,4 +33,4 @@ jobs:
         #  shell: Rscript {0}  
 
         - name: test bot
-          run: Rscript bot_test.r ${{secrets.CREDENTIALS}} ${{secrets.STATEFILE_GDRIVE}} ${{secrets.SLACK_BOT_TOKEN}} ${{secrets.F1000AUTH}}
+          run: Rscript bot_test.R ${{secrets.CREDENTIALS}} ${{secrets.STATEFILE_GDRIVE}} ${{secrets.SLACK_BOT_TOKEN}} ${{secrets.F1000AUTH}}
