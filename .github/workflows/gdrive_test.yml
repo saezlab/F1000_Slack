@@ -1,5 +1,5 @@
-# .github/workflows/main.yml
-name: Main
+# .github/workflows/test.yml
+name: Test Google Drive access
 on: [push]
 
 jobs:
