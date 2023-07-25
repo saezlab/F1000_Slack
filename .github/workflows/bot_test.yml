@@ -2,11 +2,11 @@
 name: Test the bot with slack
 on:
     push:
-	schedule:
-		# daily job
-		- cron: '30 12 * * 1-5' 
-		# monthly data dump
-		- cron: '0 1 2 * *'
+    schedule:
+        # daily job
+        - cron: '30 12 * * 1-5' 
+        # monthly data dump
+        - cron: '0 1 2 * *'
 
 jobs:
   my_job:
