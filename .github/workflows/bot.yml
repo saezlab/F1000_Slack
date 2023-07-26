@@ -3,7 +3,7 @@ name: Posting bot Slack, Sciwheel, GDrive
 on:
     schedule:
         # daily job
-        - cron: '30 12 * * 1-5' 
+        - cron: '30 10 * * 1-5' 
         # monthly data dump
         - cron: '0 1 2 * *'
 
@@ -38,7 +38,7 @@ jobs:
         #  shell: Rscript {0}  
 
         - name: test bot
-          if: github.event.schedule == '30 12 * * 1-5'
+          if: github.event.schedule == '30 10 * * 1-5'
           run: Rscript bot.R ${{secrets.CREDENTIALS}} ${{secrets.STATEFILE_GDRIVE}} ${{secrets.SLACK_BOT_TOKEN}} ${{secrets.F1000AUTH}}
         
         - name: dump bot
