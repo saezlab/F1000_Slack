@@ -95,8 +95,7 @@ lastDates <- webhooks %>% pmap_dbl(\(...) {
             
             details <- paste0(
                 note,
-                r$authorsText, ". <https://sciwheel.com/work/#/items/",
-                r$id, "/detail?collection=", current$projectId, "|", r$title, "> ",
+                r$authorsText, ". <", r$fullTextLink, "|", r$title, "> ",
                 r$journalName, ". ", r$publishedYear,
                 " - added by: ", r$f1000AddedBy,
                 ifelse(length(r$f1000Tags) > 0,
@@ -108,8 +107,7 @@ lastDates <- webhooks %>% pmap_dbl(\(...) {
             if (nchar(details) > 3000) {
                 details <- paste0(
                     "Full information too long to display. ",
-                    "<https://sciwheel.com/work/#/items/",
-                    r$id, "/detail?collection=", current$projectId, "|", r$title, "> ",
+                    "<", r$fullTextLink, "|", r$title, "> ",
                     " - added by: ", r$f1000AddedBy
                 )
             }
