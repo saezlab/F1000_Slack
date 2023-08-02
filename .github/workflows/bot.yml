@@ -43,4 +43,4 @@ jobs:
         
         - name: dump bot
           if: github.event.schedule == '0 1 2 * *'
-          run: Rscript data_dump.R ${{secrets.CREDENTIALS}} ${{secrets.DUMPFILE_GDRIVE}} ${{secrets.F1000AUTH}}
+          run: Rscript data_dump.R ${{secrets.CREDENTIALS}} ${{secrets.STATEFILE_GDRIVE}} ${{secrets.DUMPFILE_GDRIVE}} ${{secrets.F1000AUTH}}
