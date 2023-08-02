@@ -13,12 +13,15 @@ args <- commandArgs(trailingOnly = TRUE)
 # 1st: credentials for Google Drive
 credentials <- args[[1]]
 
+# State file path on google drive (stores the hooks): 
+state_file_path <- args[[2]]
+
 # Dump file path on google drive: 
-file_path <- args[[2]]
+file_path <- args[[3]]
 
 
 # Sciwheel authentication token:
-f1000auth <- args[[3]]
+f1000auth <- args[[4]]
 
 
 # Load the state from Drive
@@ -26,7 +29,7 @@ f1000auth <- args[[3]]
 drive_auth(path = rawToChar(base64enc::base64decode(credentials)), email = "f1000bot-service-account@f1000bot.iam.gserviceaccount.com" )
 
 # read the file from google drive
-webhooks <- drive_read_string(file = file_path) %>% read_csv()
+webhooks <- drive_read_string(file = state_file_path) %>% read_csv()
 
 
 
