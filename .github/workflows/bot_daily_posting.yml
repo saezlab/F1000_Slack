@@ -1,11 +1,9 @@
 # .github/workflows/bot.yml
-name: Posting bot Slack, Sciwheel, GDrive
+name: Daily posting to Slack
 on:
     schedule:
         # daily job
         - cron: '30 10 * * 1-5' 
-        # monthly data dump
-        - cron: '0 1 2 * *'
 
 jobs:
   bot_job:
@@ -37,10 +35,7 @@ jobs:
         #       'stringr', 'rlist', 'slackr', 'stringdist','googledrive','base64enc'))
         #  shell: Rscript {0}  
 
-        - name: test bot
-          if: github.event.schedule == '30 10 * * 1-5'
+        - name: posting bot
           run: Rscript bot.R ${{secrets.CREDENTIALS}} ${{secrets.STATEFILE_GDRIVE}} ${{secrets.SLACK_BOT_TOKEN}} ${{secrets.F1000AUTH}}
         
-        - name: dump bot
-          if: github.event.schedule == '0 1 2 * *'
-          run: Rscript data_dump.R ${{secrets.CREDENTIALS}} ${{secrets.STATEFILE_GDRIVE}} ${{secrets.DUMPFILE_GDRIVE}} ${{secrets.F1000AUTH}}
+    

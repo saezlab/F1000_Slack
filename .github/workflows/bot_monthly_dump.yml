@@ -1,0 +1,39 @@
+# .github/workflows/bot.yml
+name: monthly dump to gdrive
+on:
+    schedule:
+        # monthly data dump
+        - cron: '0 1 2 * *'
+
+jobs:
+  bot_job:
+    runs-on: ubuntu-latest
+
+    steps:
+        - name: Checkout repo
+          uses: actions/checkout@v3
+          
+        - name: Update apt cache
+          run: sudo apt-get update
+   
+        - name: Install cURL Headers
+          run: sudo apt-get install libcurl4-openssl-dev
+    
+        - name: Setup R
+          uses: r-lib/actions/setup-r@v2
+          with:
+              r-version: '4.3'
+        
+        # This should install dependencies from the DESCRIPTION. Caching them too.  
+        - uses: r-lib/actions/setup-r-dependencies@v2
+          with:
+              cache-version: 2
+        
+        #- name: Install dependencies
+        #  run: | 
+        #       install.packages(c('httr', 'jsonlite', 'purrr', 'dplyr', 'readr', 
+        #       'stringr', 'rlist', 'slackr', 'stringdist','googledrive','base64enc'))
+        #  shell: Rscript {0}  
+        
+        - name: dump bot
+          run: Rscript data_dump.R ${{secrets.CREDENTIALS}} ${{secrets.STATEFILE_GDRIVE}} ${{secrets.DUMPFILE_GDRIVE}} ${{secrets.F1000AUTH}}
