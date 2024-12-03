@@ -158,7 +158,7 @@ per.user.df= lapply(names(per.user),function(x) (enframe(per.user[[x]]) %>% muta
 
 #simple plot
 ggplot(per.user.df, aes(x= name, y= folder, fill = value))+
-  geom_tile()
+  geom_tile() + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
 
 
 # Notes  --------------------------------------------------------------------------------
@@ -233,7 +233,7 @@ tags.per.club.df= lapply(names(tags.per.club),function(x) (enframe(tags.per.club
 
 #simple plot
 ggplot(tags.per.club.df, aes(x= name, y= folder, fill = value))+
-  geom_tile()
+  geom_tile() + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
 
 #### tags per user
   tags.per.user = 
@@ -259,7 +259,7 @@ tags.per.user.df= lapply(names(tags.per.user),function(x) (do.call(rbind,tags.pe
 
 #simple plot
 ggplot(tags.per.user.df, aes(x= name, y= value, fill = n))+
-  geom_tile()
+  geom_tile() + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
 
 
 
