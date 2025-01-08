@@ -54,7 +54,7 @@ lastDates <- webhooks %>% pmap_dbl(\(...) {
         add_headers(Authorization = paste("Bearer", f1000auth))
     )
     print(paste(
-        Sys.time(), "channel", current$channel, "GET status",
+        "Sciwheel: ", Sys.time(), "channel", current$channel, "GET status",
         resp$status_code
     ))
     
@@ -143,7 +143,9 @@ lastDates <- webhooks %>% pmap_dbl(\(...) {
             
             print(paste(Sys.time(), "POST status", paste(respcodes, collapse = ", ")))
         }
-    }
+    }else{
+        stop("Sciwheel authentication failed, check the status code. If status code is 401, then someone needs to generate new sciwheel authentication token and update the github secret (f1000token).")
+        }
     templastDate
 })
 
