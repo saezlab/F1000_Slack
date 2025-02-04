@@ -47,6 +47,13 @@ jobs:
             --zotero_library_id "${{ secrets.ZOTERO_LIBRARY_ID }}" \
             --slack_token "${{ secrets.SLACK_API_KEY }}"
       
+      - name: Upload state file to Google Drive
+        run: |
+          python upload_google_file.py \
+            --file_id "${{ secrets.STATEFILE_FILE_ID }}" \
+            --input_path state.csv \
+            --service_account_file service_account.json
+      
       - name: Upload bot log artifact
         uses:  actions/upload-artifact@v4
         with:
