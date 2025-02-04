@@ -46,3 +46,9 @@ jobs:
             --zotero_api_key "${{ secrets.ZOTERO_API_KEY }}" \
             --zotero_library_id "${{ secrets.ZOTERO_LIBRARY_ID }}" \
             --slack_token "${{ secrets.SLACK_API_KEY }}"
+      
+      - name: Upload bot log artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: bot-log
+          path: bot.log
