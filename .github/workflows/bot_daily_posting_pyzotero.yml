@@ -26,7 +26,7 @@ jobs:
 
       # Write the service account JSON to a file from the secret.
       - name: Write Google Service Account file
-        run: base64 --decode -i "${{ secrets.GOOGLE_SERVICE_ACCOUNT_BASE64 }}" -o service_account.json
+        run: base64 --decode -i "${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}" -o service_account.json
 
       - name: Debug service_account.json file
         run: |
