@@ -3,6 +3,7 @@ import argparse
 import pandas as pd
 import logging
 import re
+import sys  # Needed to exit on error
 from fuzzywuzzy import fuzz # match slack names and zotero mentiones
 from datetime import datetime
 from pyzotero import zotero
@@ -56,13 +57,13 @@ def fetch_new_publications(zot, collection_id, last_date):
         last_date_dt = parse_last_date(last_date)
     except Exception as e:
         logging.error(f"Error parsing last_date: {e}")
-        return new_items
+        raise  # abort if last_date cannot be parsed
 
     try:
         items = zot.collection_items_top(collection_id, limit=100, sort='dateAdded', direction='desc')
     except Exception as e:
         logging.error(f"Error fetching items from collection '{collection_id}': {e}")
-        return new_items
+        raise
 
     for item in items:
         data = item.get('data', {})
@@ -313,6 +314,7 @@ def main():
     except Exception as e:
         logging.error(f"Input validation failed: {e}")
         print(f"Input validation failed: {e}")
+        sys.exit(1)
         return
 
     # Initialize Zotero API (assuming library type 'group'; adjust if needed)
@@ -324,6 +326,7 @@ def main():
     except Exception as e:
         logging.error(f"Failed to read state file '{args.file_path}': {e}")
         print(f"Failed to read state file: {e}")
+        sys.exit(1)
         return
 
     # Verify state file contains required columns.
@@ -351,7 +354,11 @@ def main():
         print(f"Processing subcollection {subcollection_id}...")
 
         # Fetch new publications for this subcollection
-        new_pubs = fetch_new_publications(zot, subcollection_id, last_date)
+        try:
+            new_pubs = fetch_new_publications(zot, subcollection_id, last_date)
+        except Exception as e:
+            logging.error(f"Aborting due to error in fetching publications: {e}")
+            sys.exit(1)
         new_count = len(new_pubs)
         logging.info(f"Found {new_count} new publications in subcollection '{subcollection_id}'.")
         print(f"Found {new_count} new publications.")
@@ -391,6 +398,7 @@ def main():
                         pub_dates.append(pub_date)
                     except Exception as e:
                         logging.error(f"Error parsing publication date '{date_str}': {e}")
+                        sys.exit(1)
             if pub_dates:
                 max_pub_date = max(pub_dates)
                 new_last_date = max_pub_date.isoformat()
@@ -418,6 +426,7 @@ def main():
         except Exception as e:
             logging.error(f"Failed to update state file: {e}")
             print(f"Failed to update state file: {e}")
+            sys.exit(1)
     else:
         logging.info("Test mode enabled; state file not updated.")
         print("Test mode: state file not updated.")
