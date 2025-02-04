@@ -1,0 +1,44 @@
+name: Daily Posting to Slack (Python Bot)
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Run every weekday at 11:00 UTC (adjust as needed)
+    - cron: '00 11 * * 1-5'
+
+jobs:
+  bot_job:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # Write the service account JSON to a file from the secret.
+      - name: Write Google Service Account file
+        run: echo "${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}" > service_account.json
+
+      - name: Download state file from Google Drive
+        run: |
+          python download_google_file.py \
+            --file_id "${{ secrets.STATEFILE_FILE_ID }}" \
+            --output_path state.csv \
+            --service_account_file service_account.json
+
+      - name: Run the Python bot
+        run: |
+          python bot.py \
+            --file_path state.csv \
+            --zotero_api_key "${{ secrets.ZOTERO_API_KEY }}" \
+            --zotero_library_id "${{ secrets.ZOTERO_LIBRARY_ID }}" \
+            --slack_token "${{ secrets.SLACK_API_KEY }}"
