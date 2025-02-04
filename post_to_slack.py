@@ -104,6 +104,7 @@ def replace_names_in_notes(notes, slack_users_df):
 
     return re.sub(r"@\w+", replacer, notes)
 
+# ------------------------------------------------------------------------------
 def get_publication_notes(pub, zot, slack_users):
     """
     Retrieve and process notes for a given Zotero publication.
@@ -139,6 +140,41 @@ def get_publication_notes(pub, zot, slack_users):
     # Replace Zotero names with Slack names (assuming replace_names_in_notes is defined)
     notes_str = replace_names_in_notes(notes_str, slack_users)
     return notes_str
+
+
+
+
+def create_slack_header(last_date_str, new_count):
+    """
+    Create a header message with:
+      - the current UTC date/time,
+      - the elapsed time since the last post,
+      - and the count of new publications.
+    """
+    try:
+        # Parse the last_date from the state file (assumed ISO format)
+        last_date = datetime.fromisoformat(last_date_str.replace("Z", "+00:00"))
+    except Exception as e:
+        # If parsing fails, report unknown elapsed time.
+        last_date = None
+        logging.error(f"Error parsing last_date '{last_date_str}': {e}")
+
+    now = datetime.utcnow()
+    if last_date:
+        delta = now - last_date
+        # Format the delta as hours, minutes, seconds (you can adjust as needed)
+        hours, remainder = divmod(delta.total_seconds(), 3600)
+        minutes, seconds = divmod(remainder, 60)
+        elapsed_str = f"{int(hours)}h {int(minutes)}m {int(seconds)}s"
+        header = f":calendar: *{now.strftime('%Y-%m-%d %H:%M:%S UTC')}* - Last update {elapsed_str} ago. "
+    else:
+        header = f":calendar: *{now.strftime('%Y-%m-%d %H:%M:%S UTC')}* - Last update unknown. "
+
+    if new_count > 0:
+        header += f"{new_count} new publication{'s' if new_count != 1 else ''} detected."
+    else:
+        header += "No new publications detected since last post."
+    return header
 
 
 # ------------------------------------------------------------------------------
@@ -198,11 +234,11 @@ def format_publication(pub, zot, slack_users):
 
 
 # ------------------------------------------------------------------------------
-def post_to_slack(token, channel, formatted_publications):
+def post_to_slack(token, channel, header_message, publication_messages):
     """
-    Post formatted publication summaries to Slack using the WebClient.
-    Attempts to join the channel if not already a member.
-    For private channels, ensure the bot is added manually.
+    Post a message to Slack that includes a header (with current timestamp, elapsed time, and count)
+    and, if available, the formatted publication messages.
+
     Returns a tuple (success_count, failure_count).
     """
     client = WebClient(token=token)
@@ -210,29 +246,34 @@ def post_to_slack(token, channel, formatted_publications):
     failure_count = 0
 
     # Attempt to join the channel (for public channels)
-    # try:
-    #     join_response = client.conversations_join(channel=channel)
-    #     if join_response.get("ok"):
-    #         logging.info(f"Joined channel {channel} successfully.")
-    # except SlackApiError as e:
-    #     # If already in channel, that's fine.
-    #     if e.response.get("error") == "already_in_channel":
-    #         logging.info(f"Already a member of channel {channel}.")
-    #     else:
-    #         logging.error(f"Error joining channel {channel}: {e.response.get('error')}")
+    try:
+        join_response = client.conversations_join(channel=channel)
+        if join_response.get("ok"):
+            logging.info(f"Joined channel {channel} successfully.")
+    except SlackApiError as e:
+        if e.response.get("error") == "already_in_channel":
+            logging.info(f"Already a member of channel {channel}.")
+        else:
+            logging.error(f"Error joining channel {channel}: {e.response.get('error')}")
 
-    for text in formatted_publications:
-        try:
-            response = client.chat_postMessage(channel=channel, text=text)
-            if response.get("ok"):
-                success_count += 1
-                logging.info("Posted publication to Slack successfully.")
-            else:
-                failure_count += 1
-                logging.error(f"Failed to post publication: {response}")
-        except SlackApiError as e:
+    # Build the final message:
+    # Start with the header. If there are publication messages, append them on new lines.
+    message_text = header_message
+    if publication_messages:
+        message_text += "\n\n" + "\n\n".join(publication_messages)
+
+    # Optionally, you can also build blocks if you want richer formatting.
+    try:
+        response = client.chat_postMessage(channel=channel, text=message_text)
+        if response.get("ok"):
+            success_count += 1
+            logging.info("Posted message to Slack successfully.")
+        else:
             failure_count += 1
-            logging.error(f"Error posting message: {e.response.get('error')}")
+            logging.error("Failed to post message: " + str(response))
+    except SlackApiError as e:
+        failure_count += 1
+        logging.error("Error posting message: " + e.response.get("error"))
     return success_count, failure_count
 
 def get_slack_users(slack_token):
@@ -300,35 +341,45 @@ def main():
     total_failure = 0
     updated_last_dates = []
 
-    for _, row in state_df.iterrows():
+    # Process each subcollection from the state file
+    for index, row in state_df.iterrows():
         subcollection_id = row['subcollectionID']
-        last_date = row['lastDate']
+        last_date = row['lastDate']  # ISO-formatted string from the state file
         channel = row['channel']
 
         logging.info(f"Processing subcollection '{subcollection_id}' for channel '{channel}' with lastDate {last_date}.")
         print(f"Processing subcollection {subcollection_id}...")
 
-        # Fetch new publications from Zotero for this subcollection.
+        # Fetch new publications for this subcollection
         new_pubs = fetch_new_publications(zot, subcollection_id, last_date)
-        logging.info(f"Found {len(new_pubs)} new publications in subcollection '{subcollection_id}'.")
-        print(f"Found {len(new_pubs)} new publications.")
+        new_count = len(new_pubs)
+        logging.info(f"Found {new_count} new publications in subcollection '{subcollection_id}'.")
+        print(f"Found {new_count} new publications.")
 
-        # Format publications for posting.
-        formatted_publications = [format_publication(pub, zot, slack_users) for pub in new_pubs]
+        # Create a header message
+        header_message = create_slack_header(last_date, new_count)
+        
+        # Format publication details if new items exist
+        if new_count > 0:
+            formatted_publications = [format_publication(pub, zot, slack_users) for pub in new_pubs]
+        else:
+            formatted_publications = []
 
+        # Post to Slack (or log in test mode)
         if args.test:
-            for formatted in formatted_publications:
-                logging.info("Test Mode - Formatted Publication:\n" + formatted)
-            # In test mode, assume all posts would be successful.
-            success_count = len(formatted_publications)
+            logging.info("Test Mode - Message to be posted:")
+            logging.info(header_message)
+            for pub_msg in formatted_publications:
+                logging.info(pub_msg)
+            success_count = new_count  # assume success
             failure_count = 0
         else:
-            success_count, failure_count = post_to_slack(args.slack_token, channel, formatted_publications)
+            success_count, failure_count = post_to_slack(args.slack_token, channel, header_message, formatted_publications)
 
         total_success += success_count
         total_failure += failure_count
 
-        # Update lastDate: choose the maximum publication date from the new items.
+        # Update the lastDate in the state file (if new publications were found)
         if new_pubs:
             pub_dates = []
             for pub in new_pubs:
@@ -351,6 +402,7 @@ def main():
             new_last_date = last_date
 
         updated_last_dates.append(new_last_date)
+
 
     report_msg = f"Total publications posted: {total_success}, Failures: {total_failure}"
     logging.info(report_msg)
