@@ -26,12 +26,11 @@ jobs:
 
       # Write the service account JSON to a file from the secret.
       - name: Write Google Service Account file
-        run: echo "${{ secrets.GOOGLE_SERVICE_ACCOUNT_BASE64 }}" | base64 --decode > service_account.json
+        run: base64 --decode -i "${{ secrets.GOOGLE_SERVICE_ACCOUNT_BASE64 }}" -o service_account.json
 
       - name: Download state file from Google Drive
         run: |
-          python download_google_file.py \
-            --file_id "${{ secrets.STATEFILE_FILE_ID }}" \
+          python download_google_file.py --file_id "${{ secrets.STATEFILE_FILE_ID }}" \
             --output_path state.csv \
             --service_account_file service_account.json
 
