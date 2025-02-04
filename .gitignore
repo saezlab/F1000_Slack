@@ -45,3 +45,8 @@ Sciwheel_update/**
 
 # plots
 overviewplots**
+
+# local files with credential data:
+test_gdrive_update.r
+test_slackbot.R
+run_test_slack.sh
