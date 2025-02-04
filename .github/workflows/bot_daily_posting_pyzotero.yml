@@ -48,7 +48,7 @@ jobs:
             --slack_token "${{ secrets.SLACK_API_KEY }}"
       
       - name: Upload bot log artifact
-        uses: actions/upload-artifact@v3
+        uses:  actions/upload-artifact@v4
         with:
           name: bot-log
           path: bot.log
