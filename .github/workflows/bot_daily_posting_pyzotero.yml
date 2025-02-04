@@ -28,6 +28,11 @@ jobs:
       - name: Write Google Service Account file
         run: base64 --decode -i "${{ secrets.GOOGLE_SERVICE_ACCOUNT_BASE64 }}" -o service_account.json
 
+      - name: Debug service_account.json file
+        run: |
+          ls -l service_account.json
+          head -n 3 service_account.json
+
       - name: Download state file from Google Drive
         run: |
           python download_google_file.py --file_id "${{ secrets.STATEFILE_FILE_ID }}" \
