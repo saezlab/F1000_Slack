@@ -5,7 +5,7 @@ import logging
 import re
 import sys  # Needed to exit on error
 from fuzzywuzzy import fuzz # match slack names and zotero mentiones
-from datetime import datetime
+from datetime import datetime, timezone
 from pyzotero import zotero
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
@@ -153,17 +153,15 @@ def create_slack_header(last_date_str, new_count):
       - and the count of new publications.
     """
     try:
-        # Parse the last_date from the state file (assumed ISO format)
         last_date = datetime.fromisoformat(last_date_str.replace("Z", "+00:00"))
     except Exception as e:
-        # If parsing fails, report unknown elapsed time.
         last_date = None
         logging.error(f"Error parsing last_date '{last_date_str}': {e}")
 
-    now = datetime.utcnow()
+    # Use an offset-aware current datetime in UTC.
+    now = datetime.now(timezone.utc)
     if last_date:
         delta = now - last_date
-        # Format the delta as hours, minutes, seconds (you can adjust as needed)
         hours, remainder = divmod(delta.total_seconds(), 3600)
         minutes, seconds = divmod(remainder, 60)
         elapsed_str = f"{int(hours)}h {int(minutes)}m {int(seconds)}s"
@@ -176,7 +174,6 @@ def create_slack_header(last_date_str, new_count):
     else:
         header += "No new publications detected since last post."
     return header
-
 
 # ------------------------------------------------------------------------------
 
