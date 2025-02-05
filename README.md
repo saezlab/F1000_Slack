@@ -1,5 +1,7 @@
 # F the Bot
-A Slack app companion script connecting F1000/Sciwheel to Slack
+A Slack app companion script connecting F1000/Sciwheel to Slack. 
+
+**See below for the Zotero - > Slack connection**
 
 ## Requirements
 The bot requires a `state.rdata` object
@@ -49,3 +51,165 @@ authentication tokens are stored as github action secrets. You need admin rights
 - GCP: Attila generated a f1000bot service with attila.gabor _ at _ uni-heidelberg.de google account. He can add people to the project if needed, but in theory you just need to invite the bot to access a file/folder. 
 - The API key belongs to f1000bot-service-account _at_ f1000bot.iam.gserviceaccount.com
 - Share with bot: If you want to access a file on google drive, make sure that this email is invited to view/edit
+
+
+# Zotero-to-Slack Bot
+
+This repository contains a Python bot that integrates Zotero with Slack. The bot automatically checks a specified Zotero subcollection for new or modified publications and posts a formatted message to a Slack channel. It also keeps a state file (stored on Google Drive) that tracks the last posting date for each subcollection. If no new publications are found, the bot still posts a status message so that you know the bot is running and to help detect issues.
+
+## Features
+
+- **Automated Publication Check:**  
+  Queries Zotero for new or modified publications since the last update.
+
+- **Slack Notifications:**  
+  Posts a Slack message containing a header (with current date/time, elapsed time since last post, and the number of new publications) along with details of new publications. When no new publications are detected, a notification is still posted.
+
+- **State File Management:**  
+  Downloads a state CSV file from Google Drive at runtime and updates it with the latest posting date. After processing, the updated state file is uploaded back to Google Drive.
+
+- **Logging:**  
+  Logs are populated in a bot.log file. The file is exported as a github action artifact (go  to github acton, check the last report, artifacts are listed below the report). If you observe an issue with the bot, I would start by checking this log for errors. 
+
+## Architecture / Workflow
+
+1. **State File on Google Drive:**  
+   The bot uses a CSV file that contains one row per Zotero subcollection. Each row includes:
+   - `subcollectionID`: The Zotero subcollection ID.
+   - `lastDate`: The ISO‑formatted timestamp of the last successful post (e.g., `2025-01-07T13:15:34Z`).
+   - `channel`: The Slack channel name or ID where the message should be posted.
+
+2. **Bot Execution Flow:**
+   - **Download State File:**  
+     The GitHub Actions workflow first downloads the state file using `download_google_file.py`.
+   - **Process Publications:**  
+     For each subcollection:
+     - Fetch new publications from Zotero.
+     - Format a header message that shows the current UTC time, elapsed time since the last update, and the number of new publications.
+     - Format each publication into a client-friendly summary (using Slack’s emoji and link formatting).
+     - Post the message to Slack. If posting fails or critical errors occur, the bot aborts without updating the state file.
+   - **Update State File:**  
+     The state file is updated with the latest posting dates for each subcollection.
+   - **Upload State File:**  
+     The updated state file is then uploaded back to Google Drive using `upload_google_file.py`.
+
+3. **GitHub Actions Pipeline:**  
+   The workflow is scheduled (e.g., daily on weekdays) and can also be triggered manually. All secrets (such as API keys and tokens) are stored as GitHub repository secrets.
+
+## Prerequisites
+
+- **Python 3.11+**
+- **Google Service Account:**  
+  A JSON key file for a Google service account with permissions to access Google Drive. (The JSON is Base64 encoded and stored as a GitHub secret.)
+- **Zotero API Key and Library ID**
+- **Slack Bot Token:**  
+  A Slack Bot User OAuth token (starts as 'xoxb-')  with scopes such as `chat:write`, `conversations:join`, and `users:read`.
+
+## Installation
+
+1. **Clone the Repository:**
+
+   ```bash
+   git clone https://github.com/saezlab/F1000_Slack.git
+   cd F1000_Slack
+   ```
+2. **Install Dependencies:**
+
+   Make sure you have pip installed. Then run:
+
+  ```bash
+  pip install -r requirements.txt
+  ```
+
+  The requirements.txt file is located in the root of the repository and includes packages such as:
+
+  - pyzotero
+  - pandas
+  - slack_sdk
+  - google-api-python-client
+  - google-auth
+  - google-auth-oauthlib
+
+## Configuration
+
+### GitHub Secrets
+ The following secrets are configured in this GitHub repository under Settings → Secrets and Variables → Actions:
+
+- **GOOGLE_SERVICE_ACCOUNT_JSON**:
+The Base64-encoded string of your service account JSON file.
+
+- **STATEFILE_FILE_ID:**
+The Google Drive file ID for the state CSV file. File ID can be read out from the sharing link of the file. 
+
+- **ZOTERO_API_KEY:**
+Your Zotero API key.
+
+- **ZOTERO_LIBRARY_ID:**
+Your Zotero library ID.
+
+- **SLACK_BOT_TOKEN:**
+Your Slack Bot User OAuth token.
+
+### Local Configuration
+The following files constitutes the pipeline: 
+
+- `bot.py` – The main bot script.
+- `download_google_file.py` – The script to download the state file.
+- `upload_google_file.py` – The script to upload the updated state file.
+
+you will also need the service account file to test google drive connection or get the state file. 
+
+- `service_account.json` – Your service account JSON file (for local testing, not stored in Git).
+
+## Usage
+### Local Testing
+
+You can test the bot locally by first downloading the state file:
+
+```bash
+python download_google_file.py --file_id YOUR_STATEFILE_FILE_ID --output_path state.csv --service_account_file service_account.json
+```
+
+Then run the bot:
+
+```bash
+python bot.py --file_path state.csv --zotero_api_key YOUR_ZOTERO_API_KEY --zotero_library_id YOUR_ZOTERO_LIBRARY_ID --slack_token YOUR_SLACK_BOT_TOKEN
+```
+
+Finally, upload the updated state file back to Google Drive:
+
+```bash
+
+python upload_google_file.py --file_id YOUR_STATEFILE_FILE_ID --input_path state.csv --service_account_file service_account.json
+```
+
+## GitHub Actions Pipeline
+The automated pipeline is defined in the file:
+`.github/workflows/bot_daily_posting_pyzotero.yml`
+
+The workflow performs the following steps:
+
+1. Checks out the repository.
+2. Sets up Python and installs dependencies.
+3. Writes the decoded service account JSON file.
+4. Downloads the state file from Google Drive.
+5. Runs the bot to post to Slack.
+6. Uploads the updated state file back to Google Drive.
+7. Uploads the log file (optional) as an artifact for troubleshooting.
+
+The workflow is scheduled to run on weekdays at the configured time and can also be manually triggered.
+
+## Slack Message Format
+Each Slack message includes:
+
+A header with the current UTC date/time, elapsed time since the last update, and a count of new publications.
+A detailed list of new publications (if any) formatted with emojis and Slack link formatting.
+This ensures you get a notification even if no new publications are detected, helping you monitor the bot’s activity.
+
+# Contributing
+Feel free to submit issues or pull requests if you have suggestions or improvements. For major changes, please open an issue first to discuss your ideas.
+
+# License
+This project is licensed under the MIT License.
+ 
+
