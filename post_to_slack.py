@@ -220,7 +220,7 @@ def format_publication(pub, zot, slack_users):
     details = (
         f":book:{notes_str}. "  # Emoji and notes
         f"{authors_str} "  # Authors string
-        f"<{url}|{title}.> "  # Slack link to the publication (displaying the title)
+        f"<{url}|{title}. > "  # Slack link to the publication (displaying the title)
         f"{published_in} ({pub_date}) "  # Publication source and date
         f"added by: {added_by}, "  # User who added the item
         f"<{alt_link} | [view on Zotero]>"  # Link to view on Zotero
