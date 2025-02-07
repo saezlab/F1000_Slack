@@ -193,13 +193,11 @@ def format_publication(pub, zot, slack_users):
     # Process authors:
     creators = data.get('creators', [])
     author_names = []
-    for author in creators[:3]:
+    for author in creators:
         if 'firstName' in author and 'lastName' in author:
             author_names.append(f"{author['firstName']} {author['lastName']}")
         elif 'name' in author:
             author_names.append(author['name'])
-    if len(creators) > 3:
-        author_names.append("et al")
     authors_str = ", ".join(author_names)
     
     # Determine publication source based on item type:
