@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import pandas as pd
+import time
 import logging
 import re
 import sys  # Needed to exit on error
