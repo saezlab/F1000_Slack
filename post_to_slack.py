@@ -190,6 +190,8 @@ def format_publication(pub, zot, slack_users):
 
     # Get processed notes (using a helper function that retrieves and cleans notes)
     notes_str = get_publication_notes(pub, zot, slack_users)
+    # Remove any &nbsp; occurrences
+    notes_str = notes_str.replace('&nbsp;', ' ')
     
     # Process authors:
     creators = data.get('creators', [])
@@ -212,22 +214,37 @@ def format_publication(pub, zot, slack_users):
     
     # Get other details:
     pub_date = data.get('date', 'Date missing')
-    url = data.get('url', 'No URL')
+    url = data.get('url', '').strip()  # Remove whitespace
     title = data.get('title', 'Title missing')
+    doi = data.get('DOI', '').strip()
     alt_link = pub.get('links', {}).get('alternate', {}).get('href', '')
     added_by = pub.get('meta', {}).get('createdByUser', {}).get('username', 'Unknown')
+    
+    # Determine how to format the title/link:
+    if url:
+        # URL is available, use it as the clickable link.
+        title_formatted = f"<{url}|{title}.>"
+    else:
+        # URL not available; try to use DOI.
+        if doi:
+            doi_url = f"https://doi.org/{doi}"
+            title_formatted = f"<{doi_url}|{title}.>"
+        else:
+            # Neither URL nor DOI available, just bold the title.
+            title_formatted = f"*{title}*"
     
     # Construct the final message using Slack formatting.
     details = (
         f":book:{notes_str}. "  # Emoji and notes
-        f"{authors_str} "  # Authors string
-        f"<{url}|{title}. > "  # Slack link to the publication (displaying the title)
+        f"{authors_str} "       # Authors string
+        f"{title_formatted} "    # Clickable title (or bold title)
         f"{published_in} ({pub_date}) "  # Publication source and date
-        f"added by: {added_by}, "  # User who added the item
+        f"added by: {added_by}, "          # User who added the item
         f"<{alt_link} | [view on Zotero]>"  # Link to view on Zotero
     )
     
     return details
+
 
 
 # ------------------------------------------------------------------------------
