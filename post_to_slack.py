@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import pandas as pd
+import time
 import logging
 import re
 import sys  # Needed to exit on error
@@ -189,6 +190,8 @@ def format_publication(pub, zot, slack_users):
 
     # Get processed notes (using a helper function that retrieves and cleans notes)
     notes_str = get_publication_notes(pub, zot, slack_users)
+    # Remove any &nbsp; occurrences
+    notes_str = notes_str.replace('&nbsp;', ' ')
     
     # Process authors:
     creators = data.get('creators', [])
@@ -211,29 +214,44 @@ def format_publication(pub, zot, slack_users):
     
     # Get other details:
     pub_date = data.get('date', 'Date missing')
-    url = data.get('url', 'No URL')
+    url = data.get('url', '').strip()  # Remove whitespace
     title = data.get('title', 'Title missing')
+    doi = data.get('DOI', '').strip()
     alt_link = pub.get('links', {}).get('alternate', {}).get('href', '')
     added_by = pub.get('meta', {}).get('createdByUser', {}).get('username', 'Unknown')
+    
+    # Determine how to format the title/link:
+    if url:
+        # URL is available, use it as the clickable link.
+        title_formatted = f"<{url}|{title}.>"
+    else:
+        # URL not available; try to use DOI.
+        if doi:
+            doi_url = f"https://doi.org/{doi}"
+            title_formatted = f"<{doi_url}|{title}.>"
+        else:
+            # Neither URL nor DOI available, just bold the title.
+            title_formatted = f"*{title}*"
     
     # Construct the final message using Slack formatting.
     details = (
         f":book:{notes_str}. "  # Emoji and notes
-        f"{authors_str} "  # Authors string
-        f"<{url}|{title}. > "  # Slack link to the publication (displaying the title)
+        f"{authors_str} "       # Authors string
+        f"{title_formatted} "    # Clickable title (or bold title)
         f"{published_in} ({pub_date}) "  # Publication source and date
-        f"added by: {added_by}, "  # User who added the item
+        f"added by: {added_by}, "          # User who added the item
         f"<{alt_link} | [view on Zotero]>"  # Link to view on Zotero
     )
     
     return details
 
 
+
 # ------------------------------------------------------------------------------
 def post_to_slack(token, channel, header_message, publication_messages):
     """
     Post a message to Slack that includes a header (with current timestamp, elapsed time, and count)
-    and, if available, the formatted publication messages.
+    and then posts each publication message individually with a 0.5 second delay between posts.
 
     Returns a tuple (success_count, failure_count).
     """
@@ -251,25 +269,35 @@ def post_to_slack(token, channel, header_message, publication_messages):
             logging.info(f"Already a member of channel {channel}.")
         else:
             logging.error(f"Error joining channel {channel}: {e.response.get('error')}")
-
-    # Build the final message:
-    # Start with the header. If there are publication messages, append them on new lines.
-    message_text = header_message
-    if publication_messages:
-        message_text += "\n\n" + "\n\n".join(publication_messages)
-
-    # Optionally, you can also build blocks if you want richer formatting.
+    
+    # Post the header message first.
     try:
-        response = client.chat_postMessage(channel=channel, text=message_text)
+        response = client.chat_postMessage(channel=channel, text=header_message)
         if response.get("ok"):
             success_count += 1
-            logging.info("Posted message to Slack successfully.")
+            logging.info("Posted header message to Slack successfully.")
         else:
             failure_count += 1
-            logging.error("Failed to post message: " + str(response))
+            logging.error("Failed to post header message: " + str(response))
     except SlackApiError as e:
         failure_count += 1
-        logging.error("Error posting message: " + e.response.get("error"))
+        logging.error("Error posting header message: " + e.response.get("error"))
+
+    # Post each publication message individually with a delay
+    for pub_msg in publication_messages:
+        time.sleep(0.5)  # Pause for 0.5 seconds between posts
+        try:
+            response = client.chat_postMessage(channel=channel, text=pub_msg)
+            if response.get("ok"):
+                success_count += 1
+                logging.info("Posted publication message to Slack successfully.")
+            else:
+                failure_count += 1
+                logging.error("Failed to post publication message: " + str(response))
+        except SlackApiError as e:
+            failure_count += 1
+            logging.error("Error posting publication message: " + e.response.get("error"))
+    
     return success_count, failure_count
 
 def get_slack_users(slack_token):
