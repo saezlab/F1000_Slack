@@ -50,3 +50,4 @@ overviewplots**
 test_gdrive_update.r
 test_slackbot.R
 run_test_slack.sh
+howto_get_note_from_sciwheel_item.ipynb  # Contains API keys
