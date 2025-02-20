@@ -206,10 +206,121 @@ A header with the current UTC date/time, elapsed time since the last update, and
 A detailed list of new publications (if any) formatted with emojis and Slack link formatting.
 This ensures you get a notification even if no new publications are detected, helping you monitor the bot’s activity.
 
+# Sciwheel to Zotero Migration Tool
+
+This repository includes a Python script (`move_notes_sciwheel_zotero.py`) that helps migrate publications and their notes from Sciwheel to Zotero by converting them to RIS format. The script preserves important metadata including titles, authors, abstracts, and importantly, any notes or highlights you've made on the papers.
+
+## Prerequisites for Using the Migration Tool
+
+1. **Python Environment Setup:**
+   - Install Python 3.11 or later if you haven't already (download from [python.org](https://www.python.org/downloads/))
+   - Install the required packages by running:
+     ```bash
+     pip install -r requirements.txt
+     ```
+
+2. **Sciwheel API Key:**
+   - You'll need a Sciwheel API key to access your publications
+   - Set it as an environment variable:
+     - On macOS/Linux: 
+       ```bash
+       export SCIWHEEL_API_KEY="your-api-key-here"
+       ```
+     - On Windows (Command Prompt):
+       ```cmd
+       set SCIWHEEL_API_KEY=your-api-key-here
+       ```
+
+3. **Sciwheel Project ID:**
+   - Find your project ID from the Sciwheel web interface:
+     1. Log in to Sciwheel
+     2. Navigate to your project
+     3. Look at the URL - it will contain the project ID (e.g., in `https://sciwheel.com/work/#/items?projectId=419191`, the ID is `419191`)
+
+## Using the Migration Tool
+
+The script can be run from the command line with various options:
+
+```bash
+python move_notes_sciwheel_zotero.py [options]
+```
+
+### Available Options:
+
+- `--project-id`: Your Sciwheel project ID (default: '419191')
+- `--limit`: Maximum number of publications to process (optional, useful for testing)
+- `--output-dir`: Directory to save the output files (default: current directory)
+- `--prefix`: Prefix for output filenames (default: 'sciwheel')
+- `--save-json`: Save raw JSON data for debugging (optional)
+
+### Example Usage:
+
+1. **Basic usage** (exports all publications from the default project):
+   ```bash
+   python move_notes_sciwheel_zotero.py
+   ```
+
+2. **Export from a specific project** with a custom output directory:
+   ```bash
+   python move_notes_sciwheel_zotero.py --project-id 123456 --output-dir ./exports
+   ```
+
+3. **Test run** with just a few publications:
+   ```bash
+   python move_notes_sciwheel_zotero.py --limit 5 --save-json
+   ```
+
+### Output Files
+
+The script generates two types of files:
+
+1. **RIS File** (always created):
+   - Named like: `sciwheel_export_YYYYMMDD_HHMMSS.ris`
+   - Contains all publications in RIS format
+   - Can be directly imported into Zotero
+
+2. **JSON File** (only if --save-json is used):
+   - Named like: `sciwheel_raw_YYYYMMDD_HHMMSS.json`
+   - Contains raw data from Sciwheel
+   - Useful for debugging or verifying the export
+
+### Importing to Zotero
+
+1. Open Zotero
+2. Go to File → Import
+3. Select the generated .ris file
+4. Choose your import options
+   - Recommended: Create a new collection for the imported items
+
+### Notes and Limitations
+
+- The script preserves formatting in notes when possible
+- HTML formatting in titles and abstracts is handled appropriately
+- All publication metadata (DOIs, PMIDs, etc.) is preserved
+- Notes and highlights are combined into a single note in Zotero
+- The script includes progress bars to show export status
+- If you encounter any issues, try the `--save-json` option and check the raw data
+
+### Troubleshooting
+
+1. **API Key Issues:**
+   - Verify your API key is correctly set as an environment variable
+   - Check if you can access the same project in your browser
+
+2. **No Output Files:**
+   - Check if you have write permissions in the output directory
+   - Verify the project ID exists and contains publications
+
+3. **Missing Notes:**
+   - Confirm you have access to the notes in Sciwheel's web interface
+   - Try using `--save-json` to check if notes are in the raw data
+
+For any other issues, check the script's log output for error messages.
+
 # Contributing
 Feel free to submit issues or pull requests if you have suggestions or improvements. For major changes, please open an issue first to discuss your ideas.
 
 # License
 This project is licensed under the MIT License.
- 
+
 
