@@ -239,7 +239,7 @@ This repository includes a Python script (`move_notes_sciwheel_zotero.py`) that 
    - Find your project ID from the Sciwheel web interface:
      1. Log in to Sciwheel
      2. Navigate to your project
-     3. Look at the URL - it will contain the project ID (e.g., in `https://sciwheel.com/work/#/items?projectId=419191`, the ID is `419191`)
+     3. Look at the URL - it will contain the project ID (e.g., in `https://sciwheel.com/work/#/items?collection=419191`, the ID is `419191`)
 
 ## Using the Migration Tool
 
