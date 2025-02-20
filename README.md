@@ -221,6 +221,10 @@ This repository includes a Python script (`move_notes_sciwheel_zotero.py`) that 
 
 2. **Sciwheel API Key:**
    - You'll need a Sciwheel API key to access your publications
+      1. Login to sciwheeel
+      2. Go to your monogram (top right) and select `Account`
+      3. Select `External API` on the left
+      4. Generate API token and copy it
    - Set it as an environment variable:
      - On macOS/Linux: 
        ```bash
