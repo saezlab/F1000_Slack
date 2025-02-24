@@ -248,6 +248,28 @@ def format_publication(pub, zot, slack_users):
 
 
 # ------------------------------------------------------------------------------
+def retry_with_backoff(func, max_retries=5, initial_delay=1):
+    """
+    Retry a function with exponential backoff.
+    
+    Args:
+        func: Function to retry
+        max_retries: Maximum number of retries
+        initial_delay: Initial delay in seconds
+    """
+    for attempt in range(max_retries):
+        try:
+            return func()
+        except SlackApiError as e:
+            if e.response.get("error") == "ratelimited":
+                if attempt == max_retries - 1:
+                    raise  # Last attempt failed
+                delay = initial_delay * (2 ** attempt)  # Exponential backoff
+                logging.warning(f"Rate limited by Slack API. Retrying in {delay} seconds...")
+                time.sleep(delay)
+            else:
+                raise
+
 def post_to_slack(token, channel, header_message, publication_messages):
     """
     Post a message to Slack that includes a header (with current timestamp, elapsed time, and count)
@@ -260,8 +282,11 @@ def post_to_slack(token, channel, header_message, publication_messages):
     failure_count = 0
 
     # Attempt to join the channel (for public channels)
+    def join_channel():
+        return client.conversations_join(channel=channel)
+
     try:
-        join_response = client.conversations_join(channel=channel)
+        join_response = retry_with_backoff(join_channel)
         if join_response.get("ok"):
             logging.info(f"Joined channel {channel} successfully.")
     except SlackApiError as e:
@@ -271,8 +296,11 @@ def post_to_slack(token, channel, header_message, publication_messages):
             logging.error(f"Error joining channel {channel}: {e.response.get('error')}")
     
     # Post the header message first.
+    def post_header():
+        return client.chat_postMessage(channel=channel, text=header_message)
+
     try:
-        response = client.chat_postMessage(channel=channel, text=header_message)
+        response = retry_with_backoff(post_header)
         if response.get("ok"):
             success_count += 1
             logging.info("Posted header message to Slack successfully.")
@@ -286,8 +314,11 @@ def post_to_slack(token, channel, header_message, publication_messages):
     # Post each publication message individually with a delay
     for pub_msg in publication_messages:
         time.sleep(0.5)  # Pause for 0.5 seconds between posts
+        def post_message():
+            return client.chat_postMessage(channel=channel, text=pub_msg)
+
         try:
-            response = client.chat_postMessage(channel=channel, text=pub_msg)
+            response = retry_with_backoff(post_message)
             if response.get("ok"):
                 success_count += 1
                 logging.info("Posted publication message to Slack successfully.")
@@ -303,7 +334,11 @@ def post_to_slack(token, channel, header_message, publication_messages):
 def get_slack_users(slack_token):
     """Fetch Slack users and return a DataFrame with display_name_normalized and id."""
     client = WebClient(token=slack_token)
-    response = client.users_list()
+    
+    def fetch_users():
+        return client.users_list()
+    
+    response = retry_with_backoff(fetch_users)
 
     members = []
     for member in response.get('members', []):
