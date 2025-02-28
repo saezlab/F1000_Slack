@@ -50,8 +50,9 @@ def parse_last_date(last_date):
 def fetch_new_publications(zot, collection_id, last_date):
     """
     Fetch new or modified publications from a specific Zotero subcollection.
-    Returns only items with a publication date (dateModified or dateAdded)
-    later than the state file’s last_date.
+    Returns items that either:
+    - Have a publication date (dateModified or dateAdded) later than the state file's last_date
+    - Have notes that were added or modified after the last_date
     """
     new_items = []
     try:
@@ -68,18 +69,43 @@ def fetch_new_publications(zot, collection_id, last_date):
 
     for item in items:
         data = item.get('data', {})
-        # Prefer dateModified; fallback to dateAdded.
+        is_new = False
+        
+        # Check paper's dates
         date_str = data.get('dateModified') or data.get('dateAdded')
-        if not date_str:
-            continue
-        try:
-            pub_date = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
-        except Exception as e:
-            logging.error(f"Error parsing publication date '{date_str}': {e}")
-            continue
+        if date_str:
+            try:
+                pub_date = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
+                if pub_date > last_date_dt:
+                    is_new = True
+            except Exception as e:
+                logging.error(f"Error parsing publication date '{date_str}': {e}")
+                continue
+        
+        # If paper isn't new by its own dates, check its notes
+        if not is_new:
+            try:
+                child_items = zot.children(item['key'])
+                for child in child_items:
+                    if child['data'].get('itemType') == 'note':
+                        note_date_str = child['data'].get('dateModified') or child['data'].get('dateAdded')
+                        if note_date_str:
+                            try:
+                                note_date = datetime.fromisoformat(note_date_str.replace("Z", "+00:00"))
+                                if note_date > last_date_dt:
+                                    is_new = True
+                                    logging.info(f"Including paper due to new/modified note from {note_date_str}")
+                                    break
+                            except Exception as e:
+                                logging.error(f"Error parsing note date '{note_date_str}': {e}")
+                                continue
+            except Exception as e:
+                logging.error(f"Error fetching child items for publication {item['key']}: {e}")
+                continue
 
-        if pub_date > last_date_dt:
+        if is_new:
             new_items.append(item)
+            
     return new_items
 
 # ------------------------------------------------------------------------------
@@ -396,7 +422,12 @@ def main():
             return
 
     # Fetch Slack users for name replacement in notes (if needed)
-    slack_users = get_slack_users(args.slack_token)
+    if args.test:
+        # In test mode, create an empty DataFrame to skip Slack user fetching
+        slack_users = pd.DataFrame(columns=['display_name_normalized', 'id'])
+        logging.info("Test mode: Skipping Slack user fetching")
+    else:
+        slack_users = get_slack_users(args.slack_token)
 
     total_success = 0
     total_failure = 0
@@ -448,6 +479,7 @@ def main():
         if new_pubs:
             pub_dates = []
             for pub in new_pubs:
+                # Get paper dates
                 data = pub.get('data', {})
                 date_str = data.get('dateModified') or data.get('dateAdded')
                 if date_str:
@@ -456,12 +488,28 @@ def main():
                         pub_dates.append(pub_date)
                     except Exception as e:
                         logging.error(f"Error parsing publication date '{date_str}': {e}")
-                        sys.exit(1)
+                
+                # Get note dates
+                try:
+                    child_items = zot.children(pub['key'])
+                    for child in child_items:
+                        if child['data'].get('itemType') == 'note':
+                            note_date_str = child['data'].get('dateModified') or child['data'].get('dateAdded')
+                            if note_date_str:
+                                try:
+                                    note_date = datetime.fromisoformat(note_date_str.replace("Z", "+00:00"))
+                                    pub_dates.append(note_date)
+                                except Exception as e:
+                                    logging.error(f"Error parsing note date '{note_date_str}': {e}")
+                except Exception as e:
+                    logging.error(f"Error fetching child items for publication {pub['key']}: {e}")
+
             if pub_dates:
-                max_pub_date = max(pub_dates)
+                max_pub_date = max(pub_dates)  # Use the most recent date from either papers or notes
                 new_last_date = max_pub_date.isoformat()
                 if new_last_date.endswith("+00:00"):
                     new_last_date = new_last_date.replace("+00:00", "Z")
+                logging.info(f"Updated lastDate to {new_last_date} based on most recent paper or note date")
             else:
                 new_last_date = last_date
         else:
