@@ -16,6 +16,9 @@ Usage examples:
 - Apply to a specific collection only:
   python clean_zotero_pdfs.py --zotero_api_key YOUR_API_KEY --zotero_library_id YOUR_LIBRARY_ID --date 2025-02-01 --collection_id COLLECTION_ID
 
+- Process items added within a date range:
+  python clean_zotero_pdfs.py --zotero_api_key YOUR_API_KEY --zotero_library_id YOUR_LIBRARY_ID --date 2025-02-01 --date_from 2025-01-01
+
 Note: Your API key must have write permissions for this operation.
 """
 
@@ -51,7 +54,7 @@ def parse_zotero_date(date_str):
         print(f"Warning: Could not parse date: {date_str} - {e}")
         return None
 
-def get_all_items(zot, collection_id=None, limit=100):
+def get_all_items(zot, collection_id=None, date_from=None, limit=100):
     """Get all items from a Zotero library or collection, handling pagination"""
     start = 0
     all_items = []
@@ -77,6 +80,19 @@ def get_all_items(zot, collection_id=None, limit=100):
         except Exception as e:
             print(f"Error retrieving items: {e}")
             break
+    
+    # Filter by date_from if provided
+    if date_from:
+        filtered_items = []
+        for item in all_items:
+            date_added_str = item.get('data', {}).get('dateAdded', '')
+            if date_added_str:
+                date_added = parse_zotero_date(date_added_str)
+                if date_added and date_added >= date_from:
+                    filtered_items.append(item)
+        
+        print(f"Filtered from {len(all_items)} to {len(filtered_items)} items added since {date_from.strftime('%Y-%m-%d')}")
+        return filtered_items
     
     return all_items
 
@@ -168,6 +184,7 @@ def main():
                       help="Library type: 'group' or 'user' (default: 'group')")
     parser.add_argument("--collection_id", help="Optional collection ID to filter by")
     parser.add_argument("--date", required=True, help="Cut-off date in YYYY-MM-DD format")
+    parser.add_argument("--date_from", help="Optional start date in YYYY-MM-DD format to filter items (only process items added on or after this date)")
     parser.add_argument("--dry_run", action="store_true", 
                       help="Don't actually delete anything, just show what would be deleted")
     args = parser.parse_args()
@@ -177,6 +194,12 @@ def main():
         # Make sure the cutoff date is timezone-aware (UTC)
         cut_off_date = datetime.fromisoformat(args.date).replace(tzinfo=timezone.utc)
         print(f"Cut-off date: {cut_off_date.strftime('%Y-%m-%d')} (UTC)")
+        
+        # Parse the from date if provided
+        date_from = None
+        if args.date_from:
+            date_from = datetime.fromisoformat(args.date_from).replace(tzinfo=timezone.utc)
+            print(f"Only processing items added on or after: {date_from.strftime('%Y-%m-%d')} (UTC)")
     except ValueError:
         print(f"Error: Invalid date format. Please use YYYY-MM-DD format.")
         sys.exit(1)
@@ -185,8 +208,11 @@ def main():
     zot = zotero.Zotero(args.zotero_library_id, args.library_type, args.zotero_api_key)
     
     # Fetch all items
-    print(f"Fetching items from {'collection ' + args.collection_id if args.collection_id else 'entire library'}...")
-    all_items = get_all_items(zot, args.collection_id)
+    collection_info = f"collection {args.collection_id}" if args.collection_id else "entire library"
+    date_filter = f" added on or after {args.date_from}" if args.date_from else ""
+    print(f"Fetching items from {collection_info}{date_filter}...")
+    
+    all_items = get_all_items(zot, args.collection_id, date_from)
     print(f"Retrieved {len(all_items)} items total.")
     
     # Process and delete PDF attachments

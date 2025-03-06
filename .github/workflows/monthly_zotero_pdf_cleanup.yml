@@ -24,13 +24,19 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Calculate cutoff date (1 month ago)
+      - name: Calculate dates
         id: date
         run: |
-          # Calculate date 1 month ago and format as YYYY-MM-DD
+          # Calculate cutoff date (1 month ago) and format as YYYY-MM-DD
           cutoff_date=$(date -d "last month" +%Y-%m-%d)
           echo "CUTOFF_DATE=$cutoff_date" >> $GITHUB_ENV
+          
+          # Calculate date from (2 months ago) for filtering which items to process
+          date_from=$(date -d "2 months ago" +%Y-%m-%d)
+          echo "DATE_FROM=$date_from" >> $GITHUB_ENV
+          
           echo "Using cutoff date: $cutoff_date"
+          echo "Processing items added since: $date_from"
 
       - name: Run Zotero PDF cleanup
         run: |
@@ -38,6 +44,8 @@ jobs:
             --zotero_api_key "${{ secrets.ZOTERO_WRITE_API_KEY }}" \
             --zotero_library_id "${{ secrets.ZOTERO_LIBRARY_ID }}" \
             --date "${{ env.CUTOFF_DATE }}" \
+            --date_from "${{ env.DATE_FROM }}" \
+            --collection_id "NYYN2TLQ" \
             --library_type "group"
       
       - name: Upload cleanup log artifact
