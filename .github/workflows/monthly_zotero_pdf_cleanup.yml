@@ -1,0 +1,48 @@
+name: Monthly Zotero PDF Cleanup
+
+on:
+  workflow_dispatch:  # Allow manual triggering
+  schedule:
+    # Run on the 1st of every month at 03:00 UTC
+    - cron: '0 3 1 * *'
+
+jobs:
+  cleanup_job:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Calculate cutoff date (1 month ago)
+        id: date
+        run: |
+          # Calculate date 1 month ago and format as YYYY-MM-DD
+          cutoff_date=$(date -d "last month" +%Y-%m-%d)
+          echo "CUTOFF_DATE=$cutoff_date" >> $GITHUB_ENV
+          echo "Using cutoff date: $cutoff_date"
+
+      - name: Run Zotero PDF cleanup
+        run: |
+          python clean_zotero_pdfs.py \
+            --zotero_api_key "${{ secrets.ZOTERO_WRITE_API_KEY }}" \
+            --zotero_library_id "${{ secrets.ZOTERO_LIBRARY_ID }}" \
+            --date "${{ env.CUTOFF_DATE }}" \
+            --library_type "group"
+      
+      - name: Upload cleanup log artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: zotero-cleanup-log-${{ env.CUTOFF_DATE }}
+          path: |
+            *.log
