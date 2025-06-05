@@ -170,6 +170,39 @@ def get_publication_notes(pub, zot, slack_users):
     return notes_str
 
 
+def get_publication_notes_no_slack(pub, zot):
+    """
+    Retrieve and process notes for a given Zotero publication.
+    
+    - Fetches child items of the publication.
+    - Extracts those with itemType 'note'.
+    - Removes HTML tags.
+    - Limits the combined string to 3000 characters.
+    - Replaces Zotero names with Slack names.
+    
+    Returns the cleaned notes string (or "No note" if none exist).
+    """
+    notes = []
+    try:
+        child_items = zot.children(pub['key'])
+    except Exception as e:
+        logging.error(f"Error fetching child items for publication {pub['key']}: {e}")
+        return "No note"
+    
+    for child in child_items:
+        if child['data'].get('itemType') == 'note':
+            raw_note = child['data'].get('note', '')
+            clean_note = re.sub(r'<[^>]+>', '', raw_note)  # Remove HTML tags
+            notes.append(clean_note)
+    
+    notes_str = "\n".join(notes)[:3000]  # Combine and limit to 3000 characters
+    if not notes_str.strip():
+        notes_str = "No note"
+    else:
+        # Remove trailing newline(s)
+        notes_str = notes_str.rstrip("\n")
+    
+    return notes_str
 
 
 def create_slack_header(last_date_str, new_count):
@@ -271,6 +304,72 @@ def format_publication(pub, zot, slack_users):
     
     return details
 
+def format_publication_for_mail(pub, zot):
+    """
+    Convert a Zotero publication JSON entry into a concise, client-friendly
+    formatted summary that includes notes, authors, and publication details.
+    The output uses emojis and Slack's link formatting.
+    """
+    data = pub.get('data', {})
+
+    # Get processed notes (using a helper function that retrieves and cleans notes)
+    notes_str = get_publication_notes(pub, zot)
+    # Remove any &nbsp; occurrences
+    notes_str = notes_str.replace('&nbsp;', ' ')
+    
+    # Process authors:
+    creators = data.get('creators', [])
+    author_names = []
+    for author in creators:
+        if 'firstName' in author and 'lastName' in author:
+            author_names.append(f"{author['firstName']} {author['lastName']}")
+        elif 'name' in author:
+            author_names.append(author['name'])
+    if len(author_names) > 8:
+        author_names = author_names[:4] + ["..."] + author_names[-4:]
+    authors_str = ", ".join(author_names)
+    
+    # Determine publication source based on item type:
+    item_type = data.get('itemType', '').lower()
+    if item_type == 'journalarticle':
+        published_in = data.get('journalAbbreviation', 'Unknown')
+    elif item_type == 'preprint':
+        published_in = 'Preprint'
+    else:
+        published_in = data.get('publicationTitle', 'Unknown')
+    
+    # Get other details:
+    pub_date = data.get('date', 'Date missing')
+    url = data.get('url', '').strip()  # Remove whitespace
+    title = data.get('title', 'Title missing')
+    doi = data.get('DOI', '').strip()
+    alt_link = pub.get('links', {}).get('alternate', {}).get('href', '')
+    added_by = pub.get('meta', {}).get('createdByUser', {}).get('username', 'Unknown')
+    
+    # Determine how to format the title/link:
+    if url:
+        # URL is available, use it as the clickable link.
+        title_formatted = f"{title}\n{url}"
+    else:
+        # URL not available; try to use DOI.
+        if doi:
+            doi_url = f"https://doi.org/{doi}"
+            title_formatted = f"{title}\n{doi_url}"
+        else:
+            # Neither URL nor DOI available, just bold the title.
+            title_formatted = f"{title}"
+    
+    # Construct the final message using Slack formatting.
+    detail_str = \
+        f"Notes: {notes_str}\n" + \
+        f"{authors_str}\n" + \
+        f"{title_formatted}\n" + \
+        f"{published_in} ({pub_date})\n" + \
+        f"added by: {added_by}\n" + \
+        f"{alt_link}\n" + \
+        "\n"
+    
+    return detail_str
 
 
 # ------------------------------------------------------------------------------
@@ -388,6 +487,8 @@ def main():
     parser.add_argument("--zotero_library_id", required=True, help="Zotero library ID.")
     parser.add_argument("--slack_token", required=True,
                         help="Slack Bot User OAuth token (with scopes: chat:write, conversations:join, users:read)")
+    parser.add_argument("--gmail_password", required=True,
+                        help="Password needed to send mails from saezlab.zotero@gmail.com")
     parser.add_argument("--test", action="store_true",
                         help="Run in test mode (log formatted publications instead of posting, and do not update state file)")
     args = parser.parse_args()
@@ -471,6 +572,34 @@ def main():
             failure_count = 0
         else:
             success_count, failure_count = post_to_slack(args.slack_token, channel, header_message, formatted_publications)
+
+            # Try composing mail with the formated publications
+            import smtplib
+            from email.mime.text import MIMEText
+            from email.mime.multipart import MIMEMultipart
+            today = datetime.now().date()
+            mail_str = "----------\n".join([format_publication_for_mail(pub, zot=zot) for pub in new_pubs])
+            sender_email = "saezlab.zotero@gmail.com"
+            receiver_email = "philipp.schaefer@uni-heidelberg.de"
+            subject = f"{str(today)} Zotero Update "
+            app_password = args.gmail_password
+
+            # Create the message
+            msg = MIMEMultipart()
+            msg["From"] = sender_email
+            msg["To"] = receiver_email
+            msg["Subject"] = subject
+            msg.attach(MIMEText(mail_str, "plain"))
+
+            # Login and send the email
+            smtp_server = "smtp.gmail.com"
+            port = 587
+
+            with smtplib.SMTP(smtp_server, port) as server:
+                server.starttls()
+                server.login(sender_email, app_password)
+                server.send_message(msg)
+
 
         total_success += success_count
         total_failure += failure_count
