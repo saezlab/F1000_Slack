@@ -313,7 +313,7 @@ def format_publication_for_mail(pub, zot):
     data = pub.get('data', {})
 
     # Get processed notes (using a helper function that retrieves and cleans notes)
-    notes_str = get_publication_notes(pub, zot)
+    notes_str = get_publication_notes_no_slack(pub, zot)
     # Remove any &nbsp; occurrences
     notes_str = notes_str.replace('&nbsp;', ' ')
     
