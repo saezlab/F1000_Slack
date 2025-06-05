@@ -10,6 +10,9 @@ from datetime import datetime, timezone
 from pyzotero import zotero
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 # ------------------------------------------------------------------------------
 # Setup a simple logfile (overwriting any previous log on each run)
@@ -573,10 +576,9 @@ def main():
         else:
             success_count, failure_count = post_to_slack(args.slack_token, channel, header_message, formatted_publications)
 
-            # Try composing mail with the formated publications
-            import smtplib
-            from email.mime.text import MIMEText
-            from email.mime.multipart import MIMEMultipart
+            # Compose mail
+
+            # 1) setup
             today = datetime.now().date()
             mail_str = "----------\n".join([format_publication_for_mail(pub, zot=zot) for pub in new_pubs])
             sender_email = "saezlab.zotero@gmail.com"
@@ -584,18 +586,15 @@ def main():
             subject = f"{str(today)} Zotero Update "
             app_password = args.gmail_password
 
-            # Create the message
+            # 2) create message
             msg = MIMEMultipart()
             msg["From"] = sender_email
             msg["To"] = receiver_email
             msg["Subject"] = subject
             msg.attach(MIMEText(mail_str, "plain"))
 
-            # Login and send the email
-            smtp_server = "smtp.gmail.com"
-            port = 587
-
-            with smtplib.SMTP(smtp_server, port) as server:
+            # 3) send the mail
+            with smtplib.SMTP(host="smtp.gmail.com", port=587) as server:
                 server.starttls()
                 server.login(sender_email, app_password)
                 server.send_message(msg)
