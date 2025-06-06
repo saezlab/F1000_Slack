@@ -685,9 +685,13 @@ def main():
 
             # 1) setup
             today = datetime.now().date()
+
             # Generate HTML for all publications
             publications_html = "".join([format_publication_for_mail_html(pub, zot=zot) for pub in new_pubs])
             html_email_content = create_html_email(publications_html)
+
+            # Generate plain text as fallback
+            plain_text = "----------\n".join([format_publication_for_mail(pub, zot=zot) for pub in new_pubs])
 
             sender_email = "saezlab.zotero@gmail.com"
             subject = f"{str(today)} Zotero Update"
@@ -699,9 +703,6 @@ def main():
                 msg["From"] = sender_email
                 msg["To"] = receiver_email
                 msg["Subject"] = subject
-                
-                # Create plain text version (fallback)
-                plain_text = "----------\n".join([format_publication_for_mail(pub, zot=zot) for pub in new_pubs])
                 
                 # Attach both plain text and HTML versions
                 part1 = MIMEText(plain_text, "plain")
