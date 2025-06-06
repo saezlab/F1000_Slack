@@ -492,6 +492,8 @@ def main():
                         help="Slack Bot User OAuth token (with scopes: chat:write, conversations:join, users:read)")
     parser.add_argument("--gmail_password", required=True,
                         help="Password needed to send mails from saezlab.zotero@gmail.com")
+    parser.add_argument("--receiver_mails", required=True,
+                        help="Mails that get Zotero updates")
     parser.add_argument("--test", action="store_true",
                         help="Run in test mode (log formatted publications instead of posting, and do not update state file)")
     args = parser.parse_args()
@@ -577,27 +579,28 @@ def main():
             success_count, failure_count = post_to_slack(args.slack_token, channel, header_message, formatted_publications)
 
             # Compose mail
+            receiver_email_list = args.receiver_mails.split(";")
 
             # 1) setup
             today = datetime.now().date()
             mail_str = "----------\n".join([format_publication_for_mail(pub, zot=zot) for pub in new_pubs])
             sender_email = "saezlab.zotero@gmail.com"
-            receiver_email = "philipp.schaefer@uni-heidelberg.de"
             subject = f"{str(today)} Zotero Update "
             app_password = args.gmail_password
 
             # 2) create message
-            msg = MIMEMultipart()
-            msg["From"] = sender_email
-            msg["To"] = receiver_email
-            msg["Subject"] = subject
-            msg.attach(MIMEText(mail_str, "plain"))
+            for receiver_email in receiver_email_list:
+                msg = MIMEMultipart()
+                msg["From"] = sender_email
+                msg["To"] = receiver_email
+                msg["Subject"] = subject
+                msg.attach(MIMEText(mail_str, "plain"))
 
-            # 3) send the mail
-            with smtplib.SMTP(host="smtp.gmail.com", port=587) as server:
-                server.starttls()
-                server.login(sender_email, app_password)
-                server.send_message(msg)
+                # 3) send the mail
+                with smtplib.SMTP(host="smtp.gmail.com", port=587) as server:
+                    server.starttls()
+                    server.login(sender_email, app_password)
+                    server.send_message(msg)
 
 
         total_success += success_count
