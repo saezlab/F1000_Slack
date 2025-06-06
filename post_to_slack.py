@@ -374,6 +374,108 @@ def format_publication_for_mail(pub, zot):
     
     return detail_str
 
+def format_publication_for_mail_html(pub, zot):
+    """
+    Convert a Zotero publication JSON entry into HTML-formatted summary
+    with proper hyperlinks for email clients.
+    """
+    data = pub.get('data', {})
+    
+    # Get processed notes
+    notes_str = get_publication_notes_no_slack(pub, zot)
+    notes_str = notes_str.replace('&nbsp;', ' ')
+    
+    # Process authors
+    creators = data.get('creators', [])
+    author_names = []
+    for author in creators:
+        if 'firstName' in author and 'lastName' in author:
+            author_names.append(f"{author['firstName']} {author['lastName']}")
+        elif 'name' in author:
+            author_names.append(author['name'])
+    if len(author_names) > 8:
+        author_names = author_names[:4] + ["..."] + author_names[-4:]
+    authors_str = ", ".join(author_names)
+    
+    # Determine publication source
+    item_type = data.get('itemType', '').lower()
+    if item_type == 'journalarticle':
+        published_in = data.get('journalAbbreviation', 'Unknown')
+    elif item_type == 'preprint':
+        published_in = 'Preprint'
+    else:
+        published_in = data.get('publicationTitle', 'Unknown')
+    
+    # Get other details
+    pub_date = data.get('date', 'Date missing')
+    url = data.get('url', '').strip()
+    title = data.get('title', 'Title missing')
+    doi = data.get('DOI', '').strip()
+    alt_link = pub.get('links', {}).get('alternate', {}).get('href', '')
+    added_by = pub.get('meta', {}).get('createdByUser', {}).get('username', 'Unknown')
+    
+    # Determine the article URL
+    article_url = ""
+    if url:
+        article_url = url
+    elif doi:
+        article_url = f"https://doi.org/{doi}"
+    
+    # Build HTML for this entry
+    html = '<div style="margin-bottom: 25px; padding: 15px; border: 1px solid #ddd; border-radius: 5px;">\n'
+    
+    # Notes
+    if notes_str and notes_str != "No note":
+        html += f'  <div style="background: #fff3cd; padding: 8px; border-radius: 3px; margin-bottom: 10px;"><strong>Notes:</strong> {notes_str}</div>\n'
+    
+    # Title (with link if available)
+    if article_url:
+        html += f'  <div style="font-size: 16px; font-weight: bold; color: #2c5aa0; margin: 10px 0;"><a href="{article_url}" target="_blank" style="color: #2c5aa0; text-decoration: none;">{title}</a></div>\n'
+    else:
+        html += f'  <div style="font-size: 16px; font-weight: bold; color: #2c5aa0; margin: 10px 0;">{title}</div>\n'
+    
+    # Authors
+    if authors_str:
+        html += f'  <div style="color: #666; font-style: italic; margin-bottom: 8px;">{authors_str}</div>\n'
+    
+    # Journal info
+    html += f'  <div style="background: #f5f5f5; padding: 5px 10px; border-radius: 3px; display: inline-block; margin-bottom: 8px;">{published_in} ({pub_date})</div>\n'
+    
+    # Added by and Zotero link
+    html += f'  <div style="color: #666; font-size: 14px; margin-top: 10px;">Added by: <strong>{added_by}</strong>'
+    if alt_link:
+        html += f' • <a href="{alt_link}" target="_blank" style="color: #1a73e8; text-decoration: none;">View in Zotero</a>'
+    html += '</div>\n'
+    
+    html += '</div>\n'
+    
+    return html
+
+def create_html_email(publications_html):
+    """Create complete HTML email with basic styling"""
+    html_email = f"""
+<html>
+<head>
+    <style>
+        body {{ 
+            font-family: Arial, sans-serif; 
+            line-height: 1.5; 
+            color: #333; 
+            max-width: 800px; 
+            margin: 0 auto; 
+            padding: 20px; 
+        }}
+        a {{ color: #1a73e8; }}
+        a:hover {{ text-decoration: underline; }}
+    </style>
+</head>
+<body>
+    <h2 style="color: #2c5aa0; border-bottom: 2px solid #2c5aa0; padding-bottom: 10px;">Zotero Update</h2>
+    {publications_html}
+</body>
+</html>
+"""
+    return html_email
 
 # ------------------------------------------------------------------------------
 def retry_with_backoff(func, max_retries=5, initial_delay=1):
@@ -583,25 +685,36 @@ def main():
 
             # 1) setup
             today = datetime.now().date()
-            mail_str = "----------\n".join([format_publication_for_mail(pub, zot=zot) for pub in new_pubs])
+            # Generate HTML for all publications
+            publications_html = "".join([format_publication_for_mail_html(pub, zot=zot) for pub in new_pubs])
+            html_email_content = create_html_email(publications_html)
+
             sender_email = "saezlab.zotero@gmail.com"
-            subject = f"{str(today)} Zotero Update "
+            subject = f"{str(today)} Zotero Update"
             app_password = args.gmail_password
 
-            # 2) create message
+            # 2) create and send message
             for receiver_email in receiver_email_list:
-                msg = MIMEMultipart()
+                msg = MIMEMultipart("alternative")  # Changed to "alternative" for HTML
                 msg["From"] = sender_email
                 msg["To"] = receiver_email
                 msg["Subject"] = subject
-                msg.attach(MIMEText(mail_str, "plain"))
+                
+                # Create plain text version (fallback)
+                plain_text = "----------\n".join([format_publication_for_mail(pub, zot=zot) for pub in new_pubs])
+                
+                # Attach both plain text and HTML versions
+                part1 = MIMEText(plain_text, "plain")
+                part2 = MIMEText(html_email_content, "html")
+                
+                msg.attach(part1)
+                msg.attach(part2)
 
                 # 3) send the mail
                 with smtplib.SMTP(host="smtp.gmail.com", port=587) as server:
                     server.starttls()
                     server.login(sender_email, app_password)
                     server.send_message(msg)
-
 
         total_success += success_count
         total_failure += failure_count
