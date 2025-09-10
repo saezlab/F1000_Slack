@@ -112,7 +112,8 @@ def fetch_new_publications(zot, collection_id, last_date):
     return new_items
 
 # ------------------------------------------------------------------------------
-def replace_names_in_notes(notes, slack_users_df):
+# NOTE: this function is deprecated now, because it did not work very well
+def replace_names_in_notes_depr(notes, slack_users_df):
     """Replace names in notes with matches from Slack users, inserting user IDs."""
     def find_best_match(name):
         name_cleaned = name.lstrip("@").lower()
@@ -134,6 +135,15 @@ def replace_names_in_notes(notes, slack_users_df):
         return name
 
     return re.sub(r"@\w+", replacer, notes)
+
+
+# NOTE: kept slack_users_df argument for compatibility
+def replace_names_in_notes(notes: str, slack_users_df=None) -> str:
+    """
+    Lowercase all names in notes that start with '@'.
+    The slack_users_df argument is ignored (kept for compatibility).
+    """
+    return re.sub(r"@\w+", lambda m: m.group(0).lower(), notes)
 
 # ------------------------------------------------------------------------------
 def get_publication_notes(pub, zot, slack_users):
