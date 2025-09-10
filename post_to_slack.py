@@ -593,7 +593,7 @@ def get_slack_users_depr(slack_token):
     members_df = pd.DataFrame(members)
     return members_df
 
-def get_slack_users(slack_ids_url):
+def get_slack_users_df(slack_ids_url):
     """Fetch Slack users and return a DataFrame with display_name_normalized and id."""
     slack_users_df = pd.read_csv(slack_ids_url)
     slack_users_df = slack_users_df[["Names", "ID"]].rename(columns={"Names": "display_name_normalized", "ID": "id"})
@@ -651,10 +651,10 @@ def main():
     # Fetch Slack users for name replacement in notes (if needed)
     if args.test:
         # In test mode, create an empty DataFrame to skip Slack user fetching
-        slack_users = pd.DataFrame(columns=['display_name_normalized', 'id'])
+        slack_users_df = pd.DataFrame(columns=['display_name_normalized', 'id'])
         logging.info("Test mode: Skipping Slack user fetching")
     else:
-        slack_users = get_slack_users(args.slack_token)
+        slack_users_df = get_slack_users_df(args.slack_token)
 
     total_success = 0
     total_failure = 0
@@ -684,7 +684,7 @@ def main():
         
         # Format publication details if new items exist
         if new_count > 0:
-            formatted_publications = [format_publication(pub, zot, slack_users) for pub in new_pubs]
+            formatted_publications = [format_publication(pub, zot, slack_users_df) for pub in new_pubs]
         else:
             formatted_publications = []
 
