@@ -654,7 +654,8 @@ def main():
         slack_users_df = pd.DataFrame(columns=['display_name_normalized', 'id'])
         logging.info("Test mode: Skipping Slack user fetching")
     else:
-        slack_users_df = get_slack_users_df(args.slack_token)
+        #slack_users_df = get_slack_users_df(args.slack_token)
+        slack_users_df = get_slack_users_df(args.slack_ids_url)
 
     total_success = 0
     total_failure = 0
