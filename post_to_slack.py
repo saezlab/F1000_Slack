@@ -113,7 +113,7 @@ def fetch_new_publications(zot, collection_id, last_date):
 
 # ------------------------------------------------------------------------------
 # NOTE: this function is deprecated now, because it did not work very well
-def replace_names_in_notes_depr(notes, slack_users_df):
+def replace_names_in_notes(notes, slack_users_df):
     """Replace names in notes with matches from Slack users, inserting user IDs."""
     def find_best_match(name):
         name_cleaned = name.lstrip("@").lower()
@@ -138,7 +138,7 @@ def replace_names_in_notes_depr(notes, slack_users_df):
 
 
 # NOTE: kept slack_users_df argument for compatibility
-def replace_names_in_notes(notes: str, slack_users_df=None) -> str:
+def replace_names_in_notes_testing(notes: str, slack_users_df=None) -> str:
     """
     Lowercase all names in notes that start with '@'.
     The slack_users_df argument is ignored (kept for compatibility).
@@ -146,7 +146,7 @@ def replace_names_in_notes(notes: str, slack_users_df=None) -> str:
     return re.sub(r"@\w+", lambda m: m.group(0).lower(), notes)
 
 # ------------------------------------------------------------------------------
-def get_publication_notes(pub, zot, slack_users):
+def get_publication_notes(pub, zot, slack_users_df):
     """
     Retrieve and process notes for a given Zotero publication.
     
@@ -179,7 +179,7 @@ def get_publication_notes(pub, zot, slack_users):
         notes_str = notes_str.rstrip("\n")
     
     # Replace Zotero names with Slack names (assuming replace_names_in_notes is defined)
-    notes_str = replace_names_in_notes(notes_str, slack_users)
+    notes_str = replace_names_in_notes(notes_str, slack_users_df)
     return notes_str
 
 
@@ -252,7 +252,7 @@ def create_slack_header(last_date_str, new_count):
 
 
 
-def format_publication(pub, zot, slack_users):
+def format_publication(pub, zot, slack_users_df):
     """
     Convert a Zotero publication JSON entry into a concise, client-friendly
     formatted summary that includes notes, authors, and publication details.
@@ -261,7 +261,7 @@ def format_publication(pub, zot, slack_users):
     data = pub.get('data', {})
 
     # Get processed notes (using a helper function that retrieves and cleans notes)
-    notes_str = get_publication_notes(pub, zot, slack_users)
+    notes_str = get_publication_notes(pub, zot, slack_users_df)
     # Remove any &nbsp; occurrences
     notes_str = notes_str.replace('&nbsp;', ' ')
     
@@ -571,7 +571,7 @@ def post_to_slack(token, channel, header_message, publication_messages):
     
     return success_count, failure_count
 
-def get_slack_users(slack_token):
+def get_slack_users_depr(slack_token):
     """Fetch Slack users and return a DataFrame with display_name_normalized and id."""
     client = WebClient(token=slack_token)
     
@@ -593,6 +593,13 @@ def get_slack_users(slack_token):
     members_df = pd.DataFrame(members)
     return members_df
 
+def get_slack_users(slack_ids_url):
+    """Fetch Slack users and return a DataFrame with display_name_normalized and id."""
+    slack_users_df = pd.read_csv(slack_ids_url)
+    slack_users_df = slack_users_df[["Names", "ID"]].rename(columns={"Names": "display_name_normalized", "ID": "id"})
+    logging.info(f"Loaded slack user df with shape: {slack_users_df.shape}")
+    return slack_users_df
+
 # ------------------------------------------------------------------------------
 def main():
     parser = argparse.ArgumentParser(description="Post new Zotero publications to Slack using WebClient")
@@ -606,6 +613,8 @@ def main():
                         help="Password needed to send mails from saezlab.zotero@gmail.com")
     parser.add_argument("--receiver_mails", required=True,
                         help="Mails that get Zotero updates")
+    parser.add_argument("--slack_ids_url", required=True,
+                        help="Link to Google sheets that stores the matching between names and slack user IDs")
     parser.add_argument("--test", action="store_true",
                         help="Run in test mode (log formatted publications instead of posting, and do not update state file)")
     args = parser.parse_args()
