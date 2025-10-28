@@ -4,6 +4,8 @@ slack_sdk
 google-api-python-client
 google-auth
 google-auth-oauthlib
+google-auth-httplib2
+packaging
 fuzzywuzzy
 python-Levenshtein
 tqdm
