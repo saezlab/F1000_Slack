@@ -28,6 +28,8 @@ jobs:
           if [ -z "${{ secrets.SLACK_API_KEY }}" ]; then echo "Missing SLACK_API_KEY"; exit 1; fi
           if [ -z "${{ secrets.GMAIL_PASSWORD }}" ]; then echo "Missing GMAIL_PASSWORD"; exit 1; fi
           if [ -z "${{ secrets.RECEIVER_MAILS }}" ]; then echo "Missing RECEIVER_MAILS"; exit 1; fi
+          # GitHub secrets are optional - just log status
+          if [ -n "${{ secrets.GITHUB_PAT }}" ]; then echo "GitHub integration: enabled"; else echo "GitHub integration: disabled (no GITHUB_PAT)"; fi
         
       - name: Install dependencies
         run: |
@@ -51,14 +53,28 @@ jobs:
 
       - name: Run the Python bot
         run: |
-          python post_to_slack.py \
+          # Build command with optional GitHub arguments
+          CMD="python post_to_slack.py \
             --file_path state.csv \
-            --zotero_api_key "${{ secrets.ZOTERO_API_KEY }}" \
-            --zotero_library_id "${{ secrets.ZOTERO_LIBRARY_ID }}" \
-            --slack_token "${{ secrets.SLACK_API_KEY }}" \
-            --gmail_password "${{ secrets.GMAIL_PASSWORD }}" \
-            --receiver_mails "${{ secrets.RECEIVER_MAILS }}" \
-            --slack_ids_url "${{ secrets.SLACK_IDS_URL }}"
+            --zotero_api_key \"${{ secrets.ZOTERO_API_KEY }}\" \
+            --zotero_library_id \"${{ secrets.ZOTERO_LIBRARY_ID }}\" \
+            --slack_token \"${{ secrets.SLACK_API_KEY }}\" \
+            --gmail_password \"${{ secrets.GMAIL_PASSWORD }}\" \
+            --receiver_mails \"${{ secrets.RECEIVER_MAILS }}\" \
+            --slack_ids_url \"${{ secrets.SLACK_IDS_URL }}\""
+
+          # Add GitHub arguments if secrets are configured
+          if [ -n "${{ secrets.GITHUB_PAT }}" ]; then
+            CMD="$CMD --github_token \"${{ secrets.GITHUB_PAT }}\""
+          fi
+          if [ -n "${{ secrets.GITHUB_TARGET_REPO }}" ]; then
+            CMD="$CMD --github_repo \"${{ secrets.GITHUB_TARGET_REPO }}\""
+          fi
+          if [ -n "${{ secrets.GITHUB_PROJECT_NUMBER }}" ]; then
+            CMD="$CMD --github_project_number \"${{ secrets.GITHUB_PROJECT_NUMBER }}\""
+          fi
+
+          eval $CMD
       
       - name: Upload state file to Google Drive
         run: |

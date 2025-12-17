@@ -13,6 +13,9 @@ from slack_sdk.errors import SlackApiError
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+import urllib.request
+import urllib.error
+import json
 
 # ------------------------------------------------------------------------------
 # Setup a simple logfile (overwriting any previous log on each run)
@@ -488,6 +491,358 @@ def create_html_email(publications_html):
     return html_email
 
 # ------------------------------------------------------------------------------
+# GitHub Integration Functions
+# ------------------------------------------------------------------------------
+
+def format_publication_for_github(pub, zot):
+    """
+    Convert a Zotero publication JSON entry into a GitHub issue format.
+    Returns a tuple of (title, body) where body is markdown-formatted.
+    """
+    data = pub.get('data', {})
+
+    # Get processed notes (without Slack mentions)
+    notes_str = get_publication_notes_no_slack(pub, zot)
+    notes_str = notes_str.replace('&nbsp;', ' ')
+
+    # Process authors
+    creators = data.get('creators', [])
+    author_names = []
+    for author in creators:
+        if 'firstName' in author and 'lastName' in author:
+            author_names.append(f"{author['firstName']} {author['lastName']}")
+        elif 'name' in author:
+            author_names.append(author['name'])
+    if len(author_names) > 8:
+        author_names = author_names[:4] + ["..."] + author_names[-4:]
+    authors_str = ", ".join(author_names)
+
+    # Determine publication source
+    item_type = data.get('itemType', '').lower()
+    if item_type == 'journalarticle':
+        published_in = data.get('journalAbbreviation', 'Unknown')
+    elif item_type == 'preprint':
+        published_in = 'Preprint'
+    else:
+        published_in = data.get('publicationTitle', 'Unknown')
+
+    # Get other details
+    pub_date = data.get('date', 'Date missing')
+    url = data.get('url', '').strip()
+    title = data.get('title', 'Title missing')
+    doi = data.get('DOI', '').strip()
+    alt_link = pub.get('links', {}).get('alternate', {}).get('href', '')
+    added_by = pub.get('meta', {}).get('createdByUser', {}).get('username', 'Unknown')
+    abstract = data.get('abstractNote', '').strip()
+
+    # Clean up abstract
+    if abstract:
+        # Remove HTML tags
+        abstract = re.sub(r'<[^>]+>', '', abstract)
+        # Remove leading "Abstract" word (case-insensitive)
+        abstract = re.sub(r'^Abstract\s*', '', abstract, flags=re.IGNORECASE)
+        # Normalize whitespace (collapse multiple spaces/newlines)
+        abstract = re.sub(r'\s+', ' ', abstract).strip()
+
+    # Truncate title if needed (GitHub limit is 256 chars)
+    issue_title = title[:253] + "..." if len(title) > 256 else title
+
+    # Build markdown body
+    body_parts = []
+
+    # Notes section
+    if notes_str and notes_str != "No note":
+        body_parts.append(f"## Notes\n{notes_str}")
+
+    # Abstract section
+    if abstract:
+        body_parts.append(f"## Abstract\n{abstract}")
+
+    # Publication details
+    body_parts.append("## Details")
+
+    if authors_str:
+        body_parts.append(f"**Authors:** {authors_str}")
+
+    body_parts.append(f"**Published in:** {published_in} ({pub_date})")
+
+    # Link to article
+    if url:
+        body_parts.append(f"**URL:** {url}")
+    elif doi:
+        body_parts.append(f"**DOI:** https://doi.org/{doi}")
+
+    # Zotero link
+    if alt_link:
+        body_parts.append(f"**Zotero:** {alt_link}")
+
+    body_parts.append(f"**Added by:** {added_by}")
+
+    body = "\n\n".join(body_parts)
+
+    return issue_title, body
+
+
+def get_github_project_id(token, owner, project_number, is_org=True):
+    """
+    Get GitHub Project v2 node ID from project number.
+
+    Args:
+        token: GitHub PAT
+        owner: Organization or user name
+        project_number: Project number (from URL)
+        is_org: True if owner is an organization, False if user
+
+    Returns:
+        Project node ID or None on failure
+    """
+    if is_org:
+        query = """
+        query($owner: String!, $number: Int!) {
+            organization(login: $owner) {
+                projectV2(number: $number) {
+                    id
+                }
+            }
+        }
+        """
+        path = ["data", "organization", "projectV2", "id"]
+    else:
+        query = """
+        query($owner: String!, $number: Int!) {
+            user(login: $owner) {
+                projectV2(number: $number) {
+                    id
+                }
+            }
+        }
+        """
+        path = ["data", "user", "projectV2", "id"]
+
+    variables = {"owner": owner, "number": int(project_number)}
+
+    result = github_graphql_request(token, query, variables)
+    if result:
+        try:
+            value = result
+            for key in path:
+                value = value[key]
+            return value
+        except (KeyError, TypeError) as e:
+            # If org query fails, try user query
+            if is_org:
+                logging.info(f"Organization project not found for {owner}, trying user project...")
+                return get_github_project_id(token, owner, project_number, is_org=False)
+            logging.error(f"Failed to extract project ID: {e}")
+    return None
+
+
+def github_graphql_request(token, query, variables=None):
+    """
+    Execute a GitHub GraphQL API request.
+
+    Returns:
+        Response JSON or None on failure
+    """
+    url = "https://api.github.com/graphql"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+    }
+
+    payload = {"query": query}
+    if variables:
+        payload["variables"] = variables
+
+    data = json.dumps(payload).encode('utf-8')
+    req = urllib.request.Request(url, data=data, headers=headers, method='POST')
+
+    try:
+        with urllib.request.urlopen(req) as response:
+            result = json.loads(response.read().decode('utf-8'))
+            if "errors" in result:
+                logging.error(f"GitHub GraphQL errors: {result['errors']}")
+                return None
+            return result
+    except urllib.error.HTTPError as e:
+        logging.error(f"GitHub GraphQL HTTP error {e.code}: {e.read().decode('utf-8')}")
+        return None
+    except urllib.error.URLError as e:
+        logging.error(f"GitHub GraphQL URL error: {e.reason}")
+        return None
+
+
+def check_issue_exists(token, repo, title):
+    """
+    Check if an issue with the given title already exists in the repository.
+
+    Args:
+        token: GitHub PAT
+        repo: Repository in "owner/repo" format
+        title: Issue title to search for
+
+    Returns:
+        Issue node_id if exists, None if not found
+    """
+    # Use GitHub search API to find issues with exact title
+    # We search in the specific repo for issues with the title
+    import urllib.parse
+
+    # Search query: exact title match in repo
+    query = f'repo:{repo} is:issue "{title}" in:title'
+    encoded_query = urllib.parse.quote(query)
+    url = f"https://api.github.com/search/issues?q={encoded_query}"
+
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28"
+    }
+
+    req = urllib.request.Request(url, headers=headers, method='GET')
+
+    try:
+        with urllib.request.urlopen(req) as response:
+            result = json.loads(response.read().decode('utf-8'))
+            items = result.get("items", [])
+
+            # Check for exact title match (search API does fuzzy matching)
+            for item in items:
+                if item.get("title") == title:
+                    logging.info(f"Issue already exists: #{item.get('number')} - {title[:50]}...")
+                    return item.get("node_id")
+
+            return None
+    except urllib.error.HTTPError as e:
+        logging.warning(f"Failed to search for existing issues: HTTP {e.code}")
+        return None
+    except urllib.error.URLError as e:
+        logging.warning(f"Failed to search for existing issues: {e.reason}")
+        return None
+
+
+def create_github_issue(token, repo, title, body):
+    """
+    Create a GitHub issue using the REST API.
+
+    Args:
+        token: GitHub PAT
+        repo: Repository in "owner/repo" format
+        title: Issue title
+        body: Issue body (markdown)
+
+    Returns:
+        Issue node_id for project linking, or None on failure
+    """
+    url = f"https://api.github.com/repos/{repo}/issues"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28"
+    }
+
+    payload = {
+        "title": title,
+        "body": body
+    }
+
+    data = json.dumps(payload).encode('utf-8')
+    req = urllib.request.Request(url, data=data, headers=headers, method='POST')
+
+    try:
+        with urllib.request.urlopen(req) as response:
+            result = json.loads(response.read().decode('utf-8'))
+            node_id = result.get("node_id")
+            issue_number = result.get("number")
+            logging.info(f"Created GitHub issue #{issue_number} in {repo}")
+            return node_id
+    except urllib.error.HTTPError as e:
+        error_body = e.read().decode('utf-8')
+        logging.error(f"Failed to create GitHub issue: HTTP {e.code} - {error_body}")
+        return None
+    except urllib.error.URLError as e:
+        logging.error(f"Failed to create GitHub issue: {e.reason}")
+        return None
+
+
+def add_issue_to_project(token, project_id, issue_node_id):
+    """
+    Add an issue to a GitHub Project (v2).
+
+    Args:
+        token: GitHub PAT
+        project_id: Project node ID
+        issue_node_id: Issue node ID
+
+    Returns:
+        True on success, False on failure
+    """
+    mutation = """
+    mutation($projectId: ID!, $contentId: ID!) {
+        addProjectV2ItemById(input: {projectId: $projectId, contentId: $contentId}) {
+            item {
+                id
+            }
+        }
+    }
+    """
+
+    variables = {
+        "projectId": project_id,
+        "contentId": issue_node_id
+    }
+
+    result = github_graphql_request(token, mutation, variables)
+    if result and result.get("data", {}).get("addProjectV2ItemById", {}).get("item"):
+        logging.info(f"Added issue to GitHub project")
+        return True
+    else:
+        logging.error(f"Failed to add issue to GitHub project")
+        return False
+
+
+def post_to_github(pub, zot, token, repo, project_id):
+    """
+    Create a GitHub issue for a publication and add it to a project.
+    Skips creation if an issue with the same title already exists.
+
+    Args:
+        pub: Zotero publication data
+        zot: Zotero API client
+        token: GitHub PAT
+        repo: Target repository (owner/repo format)
+        project_id: GitHub Project node ID
+
+    Returns:
+        True on success (or if already exists), False on failure
+    """
+    # Format the publication
+    title, body = format_publication_for_github(pub, zot)
+
+    # Check if issue already exists
+    existing_node_id = check_issue_exists(token, repo, title)
+    if existing_node_id:
+        logging.info(f"Skipping duplicate: {title[:50]}...")
+        # Still try to add to project in case it's not there yet
+        if project_id:
+            add_issue_to_project(token, project_id, existing_node_id)
+        return True  # Not a failure, just already exists
+
+    # Create the issue
+    issue_node_id = create_github_issue(token, repo, title, body)
+    if not issue_node_id:
+        return False
+
+    # Add to project
+    if project_id:
+        add_issue_to_project(token, project_id, issue_node_id)
+
+    return True
+
+
+# ------------------------------------------------------------------------------
 def retry_with_backoff(func, max_retries=5, initial_delay=1):
     """
     Retry a function with exponential backoff.
@@ -617,6 +972,12 @@ def main():
                         help="Link to Google sheets that stores the matching between names and slack user IDs")
     parser.add_argument("--test", action="store_true",
                         help="Run in test mode (log formatted publications instead of posting, and do not update state file)")
+    parser.add_argument("--github_token", required=False, default=None,
+                        help="GitHub PAT with repo and project scopes (optional)")
+    parser.add_argument("--github_repo", required=False, default=None,
+                        help="Target repository for GitHub issues (owner/repo format)")
+    parser.add_argument("--github_project_number", required=False, default=None,
+                        help="GitHub Project number (from project URL)")
     args = parser.parse_args()
 
     # Validate inputs
@@ -630,6 +991,21 @@ def main():
 
     # Initialize Zotero API (assuming library type 'group'; adjust if needed)
     zot = zotero.Zotero(args.zotero_library_id, 'group', args.zotero_api_key)
+
+    # Initialize GitHub project ID if GitHub posting is enabled
+    github_project_id = None
+    github_enabled = args.github_token and args.github_repo
+    if github_enabled:
+        logging.info(f"GitHub integration enabled for repo: {args.github_repo}")
+        if args.github_project_number:
+            owner = args.github_repo.split('/')[0]
+            github_project_id = get_github_project_id(args.github_token, owner, args.github_project_number)
+            if github_project_id:
+                logging.info(f"GitHub project ID resolved: {github_project_id}")
+            else:
+                logging.warning(f"Could not resolve GitHub project ID for project #{args.github_project_number}. Issues will be created but not added to project.")
+        else:
+            logging.info("No GitHub project number provided. Issues will be created but not added to any project.")
 
     # Read state file
     try:
@@ -736,6 +1112,19 @@ def main():
                     server.starttls()
                     server.login(sender_email, app_password)
                     server.send_message(msg)
+
+            # Post to GitHub (if enabled and not in test mode)
+            if github_enabled and new_pubs:
+                logging.info(f"Posting {len(new_pubs)} publications to GitHub...")
+                github_success = 0
+                github_failure = 0
+                for pub in new_pubs:
+                    if post_to_github(pub, zot, args.github_token, args.github_repo, github_project_id):
+                        github_success += 1
+                    else:
+                        github_failure += 1
+                    time.sleep(0.5)  # Rate limiting
+                logging.info(f"GitHub posting complete: {github_success} success, {github_failure} failures")
 
         total_success += success_count
         total_failure += failure_count
