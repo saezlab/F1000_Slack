@@ -206,6 +206,103 @@ A header with the current UTC date/time, elapsed time since the last update, and
 A detailed list of new publications (if any) formatted with emojis and Slack link formatting.
 This ensures you get a notification even if no new publications are detected, helping you monitor the bot’s activity.
 
+# GitHub Project Integration
+
+The bot can also create GitHub issues and add them to a GitHub Project board for each new Zotero publication. This is **optional** - the bot works without GitHub integration if the secrets are not configured.
+
+## Features
+
+- **Automatic Issue Creation:** Creates a GitHub issue for each new publication with:
+  - Title: Publication title
+  - Body: Notes, abstract, authors, journal, URL/DOI, Zotero link, added by
+- **Project Board Integration:** Automatically adds issues to a GitHub Project (v2) board
+- **Duplicate Detection:** Checks if an issue with the same title already exists before creating
+- **Abstract Cleaning:** Removes HTML tags and normalizes whitespace in abstracts
+
+## Setup
+
+### 1. Create a GitHub Personal Access Token (PAT)
+
+1. Go to GitHub.com → Profile → **Settings**
+2. Scroll to **Developer settings** → **Personal access tokens** → **Tokens (classic)**
+3. Click **Generate new token (classic)**
+4. Configure:
+   - **Note:** "Zotero Bot" (or any name)
+   - **Expiration:** Choose as needed
+   - **Scopes:** Check `repo` and `project`
+5. Click **Generate token** and copy it immediately
+
+### 2. Create/Identify Your GitHub Project
+
+1. Go to your organization or user profile on GitHub
+2. Click **Projects** tab → **New project** (or use existing)
+3. Note the project number from the URL: `github.com/orgs/ORG/projects/NUMBER`
+
+### 3. Add GitHub Secrets to Repository
+
+Go to your repository **Settings** → **Secrets and variables** → **Actions** and add:
+
+| Secret | Description | Example |
+|--------|-------------|---------|
+| `GITHUB_PAT` | Personal Access Token | `ghp_xxxx...` |
+| `GITHUB_TARGET_REPO` | Repository for issues | `saezlab/paper_collection` |
+| `GITHUB_PROJECT_NUMBER` | Project number from URL | `102` |
+
+### 4. Done!
+
+The bot will now automatically create issues and add them to your project board when new publications are detected.
+
+## Local Testing
+
+Two test scripts are provided for local testing:
+
+### Test GitHub API Connection
+
+```bash
+# Create a .env file with your credentials (not committed to git)
+# GITHUB_PAT=ghp_xxx
+# GITHUB_TARGET_REPO=owner/repo
+# GITHUB_PROJECT_NUMBER=123
+
+python test_github_integration.py --dry-run
+python test_github_integration.py  # Creates a test issue
+```
+
+### Test with Real Zotero Data
+
+```bash
+# Add Zotero credentials to .env
+# ZOTERO_API_KEY=xxx
+# ZOTERO_LIBRARY_ID=xxx
+
+# Dry run (shows what would be posted)
+python test_zotero_to_github.py --state-file state_pybot.csv --dry-run -n 5
+
+# Actually create issues
+python test_zotero_to_github.py --state-file state_pybot.csv -n 5
+```
+
+### .env File Format
+
+Create a `.env` file in the repository root (already in `.gitignore`):
+
+```bash
+# GitHub credentials
+GITHUB_PAT=ghp_your_token_here
+GITHUB_TARGET_REPO=owner/repo-name
+GITHUB_PROJECT_NUMBER=123
+
+# Zotero credentials
+ZOTERO_API_KEY=your_zotero_key
+ZOTERO_LIBRARY_ID=your_library_id
+```
+
+## Disabling GitHub Integration
+
+Simply don't configure the `GITHUB_PAT` secret. The bot will continue to post to Slack and send emails without creating GitHub issues.
+
+---
+
 # Sciwheel to Zotero Migration Tool
 
 This repository includes a Python script (`move_notes_sciwheel_zotero.py`) that helps migrate publications and their notes from Sciwheel to Zotero by converting them to RIS format. The script preserves important metadata including titles, authors, abstracts, and importantly, any notes or highlights you've made on the papers.
