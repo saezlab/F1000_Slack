@@ -27,7 +27,7 @@ def upload_file(file_id, input_path, service_account_file):
     media = MediaFileUpload(input_path, mimetype='text/csv', resumable=True)
     
     # Request to update the existing file on Drive.
-    request = service.files().update(fileId=file_id, media_body=media)
+    request = service.files().update(fileId=file_id, media_body=media, supportsAllDrives=True)
     
     response = None
     while response is None:
