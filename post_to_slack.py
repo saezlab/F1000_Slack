@@ -626,7 +626,7 @@ def main():
     parser.add_argument("--zotero_api_key", required=True, help="Zotero API key.")
     parser.add_argument("--zotero_library_id", required=True, help="Zotero library ID.")
     parser.add_argument("--slack_token", required=True,
-                        help="Slack Bot User OAuth token (with scopes: chat:write, conversations:join, users:read)")
+                        help="Slack Bot User OAuth token (with scopes: chat:write, channels:join, users:read)")
     parser.add_argument("--gmail_password", required=True,
                         help="Password needed to send mails from saezlab.zotero@gmail.com")
     parser.add_argument("--slack_ids_url", required=True,

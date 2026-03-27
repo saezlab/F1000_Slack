@@ -55,3 +55,6 @@ howto_get_note_from_sciwheel_item.ipynb  # Contains API keys
 
 # local files
 zotero_stats_2025.csv
+
+# cache
+__pycache__/
