@@ -27,7 +27,6 @@ jobs:
           if [ -z "${{ secrets.ZOTERO_LIBRARY_ID }}" ]; then echo "Missing ZOTERO_LIBRARY_ID"; exit 1; fi
           if [ -z "${{ secrets.SLACK_API_KEY }}" ]; then echo "Missing SLACK_API_KEY"; exit 1; fi
           if [ -z "${{ secrets.GMAIL_PASSWORD }}" ]; then echo "Missing GMAIL_PASSWORD"; exit 1; fi
-          if [ -z "${{ secrets.RECEIVER_MAILS }}" ]; then echo "Missing RECEIVER_MAILS"; exit 1; fi
         
       - name: Install dependencies
         run: |
