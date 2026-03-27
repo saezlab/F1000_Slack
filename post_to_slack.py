@@ -36,6 +36,24 @@ def validate_inputs(file_path, zotero_api_key, zotero_library_id, slack_token):
         raise ValueError("Slack Bot API token is required.")
 
 # ------------------------------------------------------------------------------
+def parse_receiver_email_list(receiver_mails, subcollection_id):
+    """Parse a semicolon-separated list of recipient emails for one subcollection."""
+    if pd.isna(receiver_mails):
+        raise ValueError(
+            f"State file row for subcollection '{subcollection_id}' is missing receiverMails."
+        )
+
+    receiver_email_list = [
+        email.strip() for email in str(receiver_mails).split(";") if email.strip()
+    ]
+    if not receiver_email_list:
+        raise ValueError(
+            f"State file row for subcollection '{subcollection_id}' has no valid receiverMails."
+        )
+
+    return receiver_email_list
+
+# ------------------------------------------------------------------------------
 def parse_last_date(last_date):
     """
     Parse an ISO‑formatted last_date string.
@@ -604,15 +622,13 @@ def get_slack_users_df(slack_ids_url):
 def main():
     parser = argparse.ArgumentParser(description="Post new Zotero publications to Slack using WebClient")
     parser.add_argument("--file_path", required=True,
-                        help="Path to the state CSV file with columns: subcollectionID, lastDate, channel")
+                        help="Path to the state CSV file with columns: subcollectionID, lastDate, channel, receiverMails")
     parser.add_argument("--zotero_api_key", required=True, help="Zotero API key.")
     parser.add_argument("--zotero_library_id", required=True, help="Zotero library ID.")
     parser.add_argument("--slack_token", required=True,
                         help="Slack Bot User OAuth token (with scopes: chat:write, conversations:join, users:read)")
     parser.add_argument("--gmail_password", required=True,
                         help="Password needed to send mails from saezlab.zotero@gmail.com")
-    parser.add_argument("--receiver_mails", required=True,
-                        help="Mails that get Zotero updates")
     parser.add_argument("--slack_ids_url", required=True,
                         help="Link to Google sheets that stores the matching between names and slack user IDs")
     parser.add_argument("--test", action="store_true",
@@ -641,12 +657,24 @@ def main():
         return
 
     # Verify state file contains required columns.
-    for col in ['subcollectionID', 'lastDate', 'channel']:
+    for col in ['subcollectionID', 'lastDate', 'channel', 'receiverMails']:
         if col not in state_df.columns:
             msg = f"State file is missing required column: {col}"
             logging.error(msg)
             print(msg)
-            return
+            sys.exit(1)
+
+    receiver_email_lists = []
+    for _, row in state_df.iterrows():
+        subcollection_id = row['subcollectionID']
+        try:
+            receiver_email_lists.append(
+                parse_receiver_email_list(row['receiverMails'], subcollection_id)
+            )
+        except ValueError as e:
+            logging.error(str(e))
+            print(str(e))
+            sys.exit(1)
 
     # Fetch Slack users for name replacement in notes (if needed)
     if args.test:
@@ -662,7 +690,7 @@ def main():
     updated_last_dates = []
 
     # Process each subcollection from the state file
-    for index, row in state_df.iterrows():
+    for row_position, (_, row) in enumerate(state_df.iterrows()):
         subcollection_id = row['subcollectionID']
         last_date = row['lastDate']  # ISO-formatted string from the state file
         channel = row['channel']
@@ -701,7 +729,7 @@ def main():
             success_count, failure_count = post_to_slack(args.slack_token, channel, header_message, formatted_publications)
 
             # Compose mail
-            receiver_email_list = args.receiver_mails.split(";")
+            receiver_email_list = receiver_email_lists[row_position]
 
             # 1) setup
             today = datetime.now().date()
@@ -714,7 +742,7 @@ def main():
             plain_text = "----------\n".join([format_publication_for_mail(pub, zot=zot) for pub in new_pubs])
 
             sender_email = "saezlab.zotero@gmail.com"
-            subject = f"{str(today)} Zotero Update"
+            subject = f"{str(today)} Zotero Update - {channel}"
             app_password = args.gmail_password
 
             # 2) create and send message

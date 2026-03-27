@@ -173,7 +173,15 @@ python download_google_file.py --file_id YOUR_STATEFILE_FILE_ID --output_path st
 Then run the bot:
 
 ```bash
-python bot.py --file_path state.csv --zotero_api_key YOUR_ZOTERO_API_KEY --zotero_library_id YOUR_ZOTERO_LIBRARY_ID --slack_token YOUR_SLACK_BOT_TOKEN
+python post_to_slack.py --file_path state.csv --zotero_api_key YOUR_ZOTERO_API_KEY --zotero_library_id YOUR_ZOTERO_LIBRARY_ID --slack_token YOUR_SLACK_BOT_TOKEN --gmail_password YOUR_GMAIL_APP_PASSWORD --slack_ids_url YOUR_SLACK_IDS_CSV_URL
+```
+
+The state CSV must contain these columns:
+
+```csv
+channel,subcollectionID,lastDate,receiverMails
+paper_collection_saezlab,NYYN2TLQ,2026-03-27T08:00:42Z,philipp.schaefer@uni-heidelberg.de;vthgiunp@feed.readwise.io
+kidney_saezlab,Z69IA85F,2026-03-26T08:00:42Z,philipp.schaefer@uni-heidelberg.de
 ```
 
 Finally, upload the updated state file back to Google Drive:
@@ -326,5 +334,4 @@ Feel free to submit issues or pull requests if you have suggestions or improveme
 
 # License
 This project is licensed under the MIT License.
-
 
