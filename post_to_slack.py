@@ -708,62 +708,64 @@ def main():
         logging.info(f"Found {new_count} new publications in subcollection '{subcollection_id}'.")
         print(f"Found {new_count} new publications.")
 
-        # Create a header message
-        header_message = create_slack_header(last_date, new_count)
-        
-        # Format publication details if new items exist
+        success_count = 0
+        failure_count = 0
+
         if new_count > 0:
+            header_message = create_slack_header(last_date, new_count)
             formatted_publications = [format_publication(pub, zot, slack_users_df) for pub in new_pubs]
+
+            # Post to Slack (or log in test mode)
+            if args.test:
+                logging.info("Test Mode - Message to be posted:")
+                logging.info(header_message)
+                for pub_msg in formatted_publications:
+                    logging.info(pub_msg)
+                success_count = new_count  # assume success
+            else:
+                success_count, failure_count = post_to_slack(args.slack_token, channel, header_message, formatted_publications)
+
+                # Compose mail
+                receiver_email_list = receiver_email_lists[row_position]
+
+                # 1) setup
+                today = datetime.now().date()
+
+                # Generate HTML for all publications
+                publications_html = "".join([format_publication_for_mail_html(pub, zot=zot) for pub in new_pubs])
+                html_email_content = create_html_email(publications_html)
+
+                # Generate plain text as fallback
+                plain_text = "----------\n".join([format_publication_for_mail(pub, zot=zot) for pub in new_pubs])
+
+                sender_email = "saezlab.zotero@gmail.com"
+                subject = f"{str(today)} Zotero Update - {channel}"
+                app_password = args.gmail_password
+
+                # 2) create and send message
+                for receiver_email in receiver_email_list:
+                    msg = MIMEMultipart("alternative")  # Changed to "alternative" for HTML
+                    msg["From"] = sender_email
+                    msg["To"] = receiver_email
+                    msg["Subject"] = subject
+                    
+                    # Attach both plain text and HTML versions
+                    part1 = MIMEText(plain_text, "plain")
+                    part2 = MIMEText(html_email_content, "html")
+                    
+                    msg.attach(part1)
+                    msg.attach(part2)
+
+                    # 3) send the mail
+                    with smtplib.SMTP(host="smtp.gmail.com", port=587) as server:
+                        server.starttls()
+                        server.login(sender_email, app_password)
+                        server.send_message(msg)
         else:
-            formatted_publications = []
-
-        # Post to Slack (or log in test mode)
-        if args.test:
-            logging.info("Test Mode - Message to be posted:")
-            logging.info(header_message)
-            for pub_msg in formatted_publications:
-                logging.info(pub_msg)
-            success_count = new_count  # assume success
-            failure_count = 0
-        else:
-            success_count, failure_count = post_to_slack(args.slack_token, channel, header_message, formatted_publications)
-
-            # Compose mail
-            receiver_email_list = receiver_email_lists[row_position]
-
-            # 1) setup
-            today = datetime.now().date()
-
-            # Generate HTML for all publications
-            publications_html = "".join([format_publication_for_mail_html(pub, zot=zot) for pub in new_pubs])
-            html_email_content = create_html_email(publications_html)
-
-            # Generate plain text as fallback
-            plain_text = "----------\n".join([format_publication_for_mail(pub, zot=zot) for pub in new_pubs])
-
-            sender_email = "saezlab.zotero@gmail.com"
-            subject = f"{str(today)} Zotero Update - {channel}"
-            app_password = args.gmail_password
-
-            # 2) create and send message
-            for receiver_email in receiver_email_list:
-                msg = MIMEMultipart("alternative")  # Changed to "alternative" for HTML
-                msg["From"] = sender_email
-                msg["To"] = receiver_email
-                msg["Subject"] = subject
-                
-                # Attach both plain text and HTML versions
-                part1 = MIMEText(plain_text, "plain")
-                part2 = MIMEText(html_email_content, "html")
-                
-                msg.attach(part1)
-                msg.attach(part2)
-
-                # 3) send the mail
-                with smtplib.SMTP(host="smtp.gmail.com", port=587) as server:
-                    server.starttls()
-                    server.login(sender_email, app_password)
-                    server.send_message(msg)
+            logging.info(
+                f"No new publications for subcollection '{subcollection_id}'; skipping Slack and email."
+            )
+            print("No new publications; skipping Slack and email.")
 
         total_success += success_count
         total_failure += failure_count
