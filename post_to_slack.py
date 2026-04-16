@@ -54,6 +54,29 @@ def parse_receiver_email_list(receiver_mails, subcollection_id):
     return receiver_email_list
 
 # ------------------------------------------------------------------------------
+def mask_email_for_logging(email):
+    """Mask most of an email address while keeping it recognizable in logs."""
+    email = str(email).strip()
+    if "@" not in email:
+        visible_chars = min(3, len(email))
+        return email[:visible_chars] + "*" * max(0, len(email) - visible_chars)
+
+    local_part, _, domain = email.partition("@")
+    visible_local_chars = min(3, len(local_part))
+    masked_local = local_part[:visible_local_chars] + "*" * max(0, len(local_part) - visible_local_chars)
+
+    domain_name, dot, tld = domain.rpartition(".")
+    if dot:
+        visible_domain_chars = min(3, len(domain_name))
+        masked_domain_name = domain_name[:visible_domain_chars] + "*" * max(0, len(domain_name) - visible_domain_chars)
+        masked_domain = f"{masked_domain_name}.{tld}"
+    else:
+        visible_domain_chars = min(3, len(domain))
+        masked_domain = domain[:visible_domain_chars] + "*" * max(0, len(domain) - visible_domain_chars)
+
+    return f"{masked_local}@{masked_domain}"
+
+# ------------------------------------------------------------------------------
 def parse_last_date(last_date):
     """
     Parse an ISO‑formatted last_date string.
@@ -685,8 +708,10 @@ def main():
         #slack_users_df = get_slack_users_df(args.slack_token)
         slack_users_df = get_slack_users_df(args.slack_ids_url)
 
+    total_publications_found = 0
     total_success = 0
     total_failure = 0
+    total_emails_sent = 0
     updated_last_dates = []
 
     # Process each subcollection from the state file
@@ -705,6 +730,7 @@ def main():
             logging.error(f"Aborting due to error in fetching publications: {e}")
             sys.exit(1)
         new_count = len(new_pubs)
+        total_publications_found += new_count
         logging.info(f"Found {new_count} new publications in subcollection '{subcollection_id}'.")
         print(f"Found {new_count} new publications.")
 
@@ -744,6 +770,7 @@ def main():
 
                 # 2) create and send message
                 for receiver_email in receiver_email_list:
+                    masked_receiver_email = mask_email_for_logging(receiver_email)
                     msg = MIMEMultipart("alternative")  # Changed to "alternative" for HTML
                     msg["From"] = sender_email
                     msg["To"] = receiver_email
@@ -757,10 +784,27 @@ def main():
                     msg.attach(part2)
 
                     # 3) send the mail
+                    logging.info(
+                        f"Sending email for channel '{channel}' to '{masked_receiver_email}' with subject '{subject}'."
+                    )
                     with smtplib.SMTP(host="smtp.gmail.com", port=587) as server:
                         server.starttls()
                         server.login(sender_email, app_password)
-                        server.send_message(msg)
+                        send_result = server.send_message(msg)
+
+                    if send_result:
+                        masked_send_result = {
+                            mask_email_for_logging(refused_email): refusal_details
+                            for refused_email, refusal_details in send_result.items()
+                        }
+                        logging.warning(
+                            f"Email send returned refused recipients for channel '{channel}': {masked_send_result}"
+                        )
+                    else:
+                        total_emails_sent += 1
+                        logging.info(
+                            f"Email sent successfully for channel '{channel}' to '{masked_receiver_email}'."
+                        )
         else:
             logging.info(
                 f"No new publications for subcollection '{subcollection_id}'; skipping Slack and email."
@@ -813,9 +857,15 @@ def main():
         updated_last_dates.append(new_last_date)
 
 
-    report_msg = f"Total publications posted: {total_success}, Failures: {total_failure}"
-    logging.info(report_msg)
-    print(report_msg)
+    summary_messages = [
+        f"Total new publications found: {total_publications_found}",
+        f"Total Slack messages sent: {total_success}",
+        f"Total emails sent: {total_emails_sent}",
+        f"Total Slack posting failures: {total_failure}",
+    ]
+    for summary_message in summary_messages:
+        logging.info(summary_message)
+        print(summary_message)
 
     # Update state file only if not running in test mode.
     if not args.test:
