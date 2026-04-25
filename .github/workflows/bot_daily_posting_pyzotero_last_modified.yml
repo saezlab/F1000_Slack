@@ -1,4 +1,4 @@
-name: Daily Last-Modified Zotero Shadow Bot
+name: Daily Last-Modified Zotero Bot
 
 on:
   workflow_dispatch:
@@ -47,7 +47,7 @@ jobs:
             --output_path state_last_modified.csv \
             --service_account_file service_account.json
 
-      - name: Run the last-modified shadow bot
+      - name: Run the last-modified bot
         run: |
           python post_to_slack_last_modified.py \
             --file_path state_last_modified.csv \
@@ -55,8 +55,7 @@ jobs:
             --zotero_library_id "${{ secrets.ZOTERO_LIBRARY_ID }}" \
             --slack_token "${{ secrets.SLACK_API_KEY }}" \
             --gmail_password "${{ secrets.GMAIL_PASSWORD }}" \
-            --slack_ids_url "${{ secrets.SLACK_IDS_URL }}" \
-            --log_only
+            --slack_ids_url "${{ secrets.SLACK_IDS_URL }}"
 
       - name: Upload last-modified state file to Google Drive
         run: |
