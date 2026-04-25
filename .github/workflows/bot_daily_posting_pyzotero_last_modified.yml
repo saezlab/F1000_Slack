@@ -1,0 +1,72 @@
+name: Daily Last-Modified Zotero Shadow Bot
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Run every weekday at 11:15 UTC, shortly after the primary bot.
+    - cron: '15 11 * * 1-5'
+
+jobs:
+  bot_job:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Check required secrets
+        run: |
+          if [ -z "${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}" ]; then echo "Missing GOOGLE_SERVICE_ACCOUNT_JSON"; exit 1; fi
+          if [ -z "${{ secrets.STATEFILE_LASTMODIFIED_FILE_ID }}" ]; then echo "Missing STATEFILE_LASTMODIFIED_FILE_ID"; exit 1; fi
+          if [ -z "${{ secrets.ZOTERO_API_KEY }}" ]; then echo "Missing ZOTERO_API_KEY"; exit 1; fi
+          if [ -z "${{ secrets.ZOTERO_LIBRARY_ID }}" ]; then echo "Missing ZOTERO_LIBRARY_ID"; exit 1; fi
+          if [ -z "${{ secrets.SLACK_API_KEY }}" ]; then echo "Missing SLACK_API_KEY"; exit 1; fi
+          if [ -z "${{ secrets.GMAIL_PASSWORD }}" ]; then echo "Missing GMAIL_PASSWORD"; exit 1; fi
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Write Google Service Account file
+        run: echo "${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}" | base64 --decode > service_account.json
+
+      - name: Debug service_account.json file
+        run: |
+          ls -l service_account.json
+          head -n 3 service_account.json
+
+      - name: Download last-modified state file from Google Drive
+        run: |
+          python download_google_file.py --file_id "${{ secrets.STATEFILE_LASTMODIFIED_FILE_ID }}" \
+            --output_path state_last_modified.csv \
+            --service_account_file service_account.json
+
+      - name: Run the last-modified shadow bot
+        run: |
+          python post_to_slack_last_modified.py \
+            --file_path state_last_modified.csv \
+            --zotero_api_key "${{ secrets.ZOTERO_API_KEY }}" \
+            --zotero_library_id "${{ secrets.ZOTERO_LIBRARY_ID }}" \
+            --slack_token "${{ secrets.SLACK_API_KEY }}" \
+            --gmail_password "${{ secrets.GMAIL_PASSWORD }}" \
+            --slack_ids_url "${{ secrets.SLACK_IDS_URL }}" \
+            --log_only
+
+      - name: Upload last-modified state file to Google Drive
+        run: |
+          python upload_google_file.py \
+            --file_id "${{ secrets.STATEFILE_LASTMODIFIED_FILE_ID }}" \
+            --input_path state_last_modified.csv \
+            --service_account_file service_account.json
+
+      - name: Upload bot log artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bot-log-last-modified
+          path: bot.log
